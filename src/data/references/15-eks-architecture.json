@@ -15,42 +15,6 @@
   },
   "nodes": [
     {
-      "id": "eks-workload",
-      "type": "serviceNode",
-      "position": {
-        "x": 790,
-        "y": 1025
-      },
-      "data": {
-        "serviceId": "eks",
-        "label": "Application Service \u00b7 observed Ready pods",
-        "category": "Containers",
-        "health": "healthy",
-        "az": "AZ-B",
-        "subnet": "private",
-        "replicas": 3,
-        "multiAz": false,
-        "visualContainerId": "eks-subnet-b",
-        "customConfig": {
-          "eks": {
-            "kind": "workload",
-            "clusterName": "eks-architecture",
-            "namespace": "default",
-            "workloadName": "application",
-            "desiredReplicas": 3,
-            "runningPods": 3,
-            "readyPods": 3,
-            "serviceSelector": "app",
-            "podLabel": "app",
-            "servicePort": 80,
-            "containerPort": 8080,
-            "serviceType": "ClusterIP",
-            "controlPlaneAvailable": true
-          }
-        }
-      }
-    },
-    {
       "id": "eks-region",
       "type": "boundaryNode",
       "position": {

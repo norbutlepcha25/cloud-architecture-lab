@@ -1,10 +1,8 @@
 {
   "id": "lab4-private-tasks",
-  "category": "My references",
-  "difficulty": "Beginner",
-  "description": "User-created architecture snapshot.",
-  "learningOutcome": "",
-  "name": "LAB-04-ECS-USMS-ENROLMENT",
+  "title": "Private ECS tasks serve enrolment request",
+  "description": "Load the course resource layout and explore a supported request path.",
+  "expected": "SUCCESS: the enrolment request reaches the private ECS tasks.",
   "nodes": [
     {
       "id": "box-vpc",
@@ -510,7 +508,7 @@
         "y": -60
       },
       "data": {
-        "serviceId": "ecr",
+        "serviceId": "ecr_registry",
         "label": "Amazon ECR Public (public.ecr.aws)",
         "category": "Containers",
         "health": "healthy",
@@ -539,8 +537,8 @@
       "id": "node-igw",
       "type": "serviceNode",
       "position": {
-        "x": -12.261345707050154,
-        "y": 198.9848723905998
+        "x": 30,
+        "y": 730
       },
       "data": {
         "serviceId": "internet_gateway",
@@ -617,7 +615,7 @@
       "type": "serviceNode",
       "position": {
         "x": 578,
-        "y": 204.90762415650707
+        "y": 150
       },
       "data": {
         "serviceId": "nat_gateway",
@@ -864,7 +862,7 @@
       "type": "serviceNode",
       "position": {
         "x": 233.952464298262,
-        "y": 768.8595946535228
+        "y": 730
       },
       "data": {
         "serviceId": "route_tables",
@@ -898,7 +896,7 @@
       "type": "serviceNode",
       "position": {
         "x": 559.2570428420856,
-        "y": 772.2548410833489
+        "y": 730
       },
       "data": {
         "serviceId": "route_tables",
@@ -932,7 +930,7 @@
       "type": "serviceNode",
       "position": {
         "x": 1084.721391065782,
-        "y": 780.7429571579144
+        "y": 730
       },
       "data": {
         "serviceId": "s3_gateway_endpoint",
@@ -1493,47 +1491,10 @@
         "flowStatus": "dimmed",
         "description": "Uses usms-ecs-exec-role (pull/logs) and usms-ecs-task-role (app)"
       }
-    },
-    {
-      "id": "lab-client-lab-web",
-      "source": "lab-client",
-      "target": "lab-web",
-      "type": "custom",
-      "data": {
-        "protocol": "HTTP",
-        "interactionType": "synchronous",
-        "isCriticalDependency": true,
-        "timeoutMs": 1500
-      }
-    },
-    {
-      "id": "lab-web-lab-task-b",
-      "source": "lab-web",
-      "target": "lab-task-b",
-      "type": "custom",
-      "data": {
-        "protocol": "HTTP",
-        "interactionType": "synchronous",
-        "isCriticalDependency": true,
-        "timeoutMs": 1500
-      }
-    },
-    {
-      "id": "lab-task-b-lab-logs",
-      "source": "lab-task-b",
-      "target": "lab-logs",
-      "type": "custom",
-      "data": {
-        "protocol": "HTTPS",
-        "interactionType": "synchronous",
-        "isCriticalDependency": true,
-        "timeoutMs": 1500,
-        "traversal": "dependency"
-      }
     }
   ],
   "scenario": {
-    "id": "lab4-enrolment-request",
+    "id": "lab4-private-tasks",
     "name": "Student enrolment request",
     "method": "GET",
     "path": "/",
