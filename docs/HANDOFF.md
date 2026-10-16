@@ -1,5 +1,124 @@
 # Handoff — live project state
 
+## Merge with upstream Lab 4 redesign (PRs #17/#18) — 2026-10-17
+
+Upstream rewrote 04-lab4-private-tasks.json. Kept upstream's diagram and re-applied: route tables
+(usms-public-rt local + 0.0.0.0/0 → IGW, usms-private-rt local + 0.0.0.0/0 → NAT), subnet
+associations, S3 endpoint on the private table, a web-01 → db-01 SQL optional dependency
+(usms-db-sg allows 5432 from usms-app-sg; db-01 was otherwise stray), and renamed box-vpc →
+lab-vpc (test/course-labs.test.ts layout check looks up `lab-vpc`; upstream main failed it).
+Lab 4 succeeds with assumed and strict routing.
+
+## Behavior explanation overlays — 2026-10-17
+
+engine/explain/walkthrough.ts builds step-by-step walkthroughs from engine decisions: sqsWalkthrough
+(lifecycle, retries, DLQ redrive), pipelineWalkthrough (from runPipelineExecution),
+codeDeployWalkthrough (batches per config / ECS-Lambda traffic shifting; uses
+instanceDeploymentProblems + deploymentInstances now exported from cicd/pipeline.ts),
+networkPathWalkthrough (route engine). UI: learning/WalkthroughView.tsx (lanes, token, step
+controls, AWS links), WalkthroughExplorer.tsx (WALKTHROUGH_SERVICES: codepipeline, codecommit,
+codebuild, codedeploy, route_tables, nat_gateway, internet_gateway); SQS lifecycle added above the
+existing scaling lesson in ServiceBehaviorExplorer (UI test for the scaling lesson unchanged).
+What-ifs use clones only. Reference 07 gained Orders DLQ (maxReceiveCount 5). Skill step 5b added;
+SERVICE_TEMPLATE gained an Explanation overlay section. Tests: test/walkthrough.test.ts (5).
+
+## SQS behavior (/aws-service SQS) — 2026-10-17
+
+engine/messaging/sqs.ts + managedServices adapter: producer route check (NAT / IGW / SQS interface
+endpoint — interface endpoints are now a generic private path in subnetRouting), 1 MiB limit,
+consumers (Lambda mapping timeout rule, consumer IAM incl. kms:Decrypt on a KMS node, consumer
+egress, process/delete, retries, DLQ redrive), delay + retention runtime, queue validation findings,
+queue → DLQ relationship. Panels: QueueSettings in ManagedServicePanel; Lambda timeout/processing
+result. Reference 07 gained SQS interface endpoint + worker role (was unreachable per AWS).
+Spec docs/behavior/sqs.md; tests tests/aws-conformance/messaging/sqs.test.ts (9). FIFO still
+rejected (pinned by test/managed-services.test.ts); FAILURE_SIMULATION flag unchanged (guarded).
+
+## Per-service IAM roles — 2026-10-17
+
+Role panel (Ec2IamRolePanel, for ec2/lambda/ecs/fargate) was S3-only. Now engine/iam/roleBuilder.ts
+derives permissions from what the caller actually calls (through endpoints/NAT/IGW, honoring edge
+`action`): S3, DynamoDB, SQS, SNS, Lambda, KMS, Secrets Manager (SERVICE_ACTIONS, shared with
+connectionContracts operations). buildRole scopes one statement per resource and trusts the caller's
+service principal; targetResourceArn shared with iam/applicationHop.ts. Panel shows per-action
+"allowed now / denied now" from the live IAM engine, extra-resource grants, create/update/detach.
+Data fix: least-privilege roles added to references 04 (Lambda), 07 (ECS → SQS; now succeeds 202),
+08 (app tier EC2 → S3), 10 (both ECS services → DynamoDB). Tests: test/iam-role-builder.test.ts.
+IGW/NAT have no edges by design: attachment + route tables, not lines (see route_tables.md).
+
+## CI/CD services + /aws-service skill — 2026-10-17
+
+- New engine src/engine/cicd/pipeline.ts: CodePipeline execution (result kind `workflow`) with
+  CodeCommit/S3/ECR source, CodeBuild build, CodeDeploy (EC2/ASG, ECS, Lambda) and ECS deploy
+  actions. Rules verified from AWS docs (specs docs/behavior/codepipeline.md, codebuild.md,
+  codedeploy.md, codecommit.md). Uses IAM engine (service principals added for codepipeline/
+  codebuild/codedeploy), subnetRouting (CodeBuild VPC needs NAT not IGW; CodeDeploy agent egress).
+  Missing service roles are reported NOT_EVALUATED (not denied).
+- liveSimulation dispatches to the pipeline when the start node is a pipeline or a CodeCommit/ECR
+  source; context runFromNode(id) powers "Run pipeline" / "Push commit".
+- connectionContracts CICD_PAIRS: control-plane relationships (valid, never request hops).
+- UI: CicdPanels.tsx (pipeline stages/issues/run, repo branch/push, build options, deployment
+  group config + agent toggles, service role creator). inspectorProfile ids pipeline/repo/build/deploy.
+- New reference 18-cicd-codepipeline-ec2.json. Labs 11/12 unchanged (configuration checks).
+- Tests: tests/aws-conformance/devtools/cicd.test.ts (15). npm test 558 + 47 pass; build passes;
+  browser check of Push commit → Pipeline SUCCEEDED.
+- Project skill .claude/skills/aws-service/SKILL.md (`/aws-service <name>`), linked from CLAUDE.md
+  and AGENTS.md.
+- UNKNOWN/not enforced: "source actions only in first stage". Not modeled: approvals, parallel
+  actions, CloudFormation/S3 deploy, lifecycle hooks, appspec.
+
+## Routing consistency pass — 2026-10-17
+
+User asked for AWS-close, identical routing across designs/labs/references. "Assume route tables"
+now GENERATES standard tables per subnet (public → VPC's IGW; private → same-VPC public NAT, same AZ
+first; unconfigured gateway endpoints associated) and runs them through subnetRouting.ts - the
+legacy any-IGW/any-NAT heuristics now apply only outside subnets/VPCs. IGW attachment inferred
+from containment, border touch or sole VPC. Ingress gate: internet clients always; managed origins
+only to public subnets; CloudFront VPC origin exempt. Internet→private subnet = 403, egress no
+route = 504. DynamoDB no longer exempt from egress: reference 10 gained a DynamoDB gateway
+endpoint (test 29 relied on the exemption). Validation (routingConfigurationIssues): one IGW per VPC,
+table single VPC, valid/unique routes, targets in table VPC; shown in RouteTablePanel/IGW panel.
+"Detached" relabelled "Not attached"; IGW failure traces say teaching scenario. All labs and
+references: default outcomes identical to before; zero routing issues. References still have no
+route table nodes (strict mode fails them) - offered to user, not done.
+
+## Route table simulation + right panel — 2026-10-17
+
+- engine/network/subnetRouting.ts: route tables associated with subnets decide internet ingress
+  (IGW attached to VPC), egress (IGW / NAT whose subnet routes to IGW) and S3/DynamoDB gateway
+  endpoint prefix-list routes (endpoint customConfig.routeTableIds). Wired in adapters/networkPath.ts
+  and adapters/vpcEndpoint.ts. applicationHop.ts runs liveRouting only when the target has an
+  explicit private IP (otherwise an associated subnet made every hop "unsupported").
+- scenario.assumeRouteTables (default true; UI checkbox in the simulation bar). Off = unassociated
+  subnets get local-only routing (new-VPC main table).
+- UI: RouteTablePanel (routes, presets, subnet associations), subnet "Route table" select,
+  endpoint route table associations. RightPanel wraps the inspector: collapse rail + 520px wide
+  mode, remembered in localStorage.
+- Internet gateway panel (InternetGatewayPanel, inspectorProfile 'igw'): VPC attachment via
+  networkIdentity.vpcId or customConfig.attachment='detached'; detached IGW blocks traffic in both
+  routing modes and in validation/network.ts. Test RT-IGW-INGRESS-004.
+- All 19 lab JSONs now have real routes + associations; lab outcomes identical in both modes and
+  unchanged from before. route_tables capability NETWORK_BEHAVIOR now true.
+- Spec docs/behavior/route_tables.md; deviations updated. Tests:
+  tests/aws-conformance/networking/route-tables-live.test.ts (13). npm test 537 + 47 pass.
+
+## S3 gateway endpoint errors — 2026-10-16
+
+Cause: not the endpoint. The network hop to the S3 gateway endpoint succeeds; the S3 call was
+denied by IAM because the calling compute had no role. Fixed:
+- engine/iam/servicePrincipals.ts: shared caller principal (ec2/ecs-tasks/lambda .amazonaws.com)
+  + short-form trust normalization, used by BOTH iam/applicationHop.ts and validation/iam.ts
+  (they previously disagreed; Lambda used caller id `lambda`, so an AWS-form trust failed).
+- iam/applicationHop.ts: S3 GetObject/PutObject use the object ARN for every caller (was EC2 only).
+- architecture/relationships.ts carriesRequest(): protocol `Replication` never forwards a request.
+- References 09 Simple website (EC2 role) and 13 Thumbnail (Lambda role, PutObject on dest edge)
+  now succeed; bucket resourceArn set. Conformance: tests/aws-conformance/iam/service-roles.test.ts.
+- Inspector "IAM role" accordion now for ec2, lambda, ecs, fargate (createServiceS3Role).
+OPEN (user decision): reference 03 Multi-AZ VPC draws RDS -> S3 gateway. RDS is not an IAM caller
+(registry claims RDS IAM NOT_APPLICABLE, test 8), so caller lookup walks back to the web servers
+and reports "Web servers has no IAM role" - misattributed. Options: model RDS S3-integration role
+(changes the registry claim) or redraw the S3 call from the web tier. Verification: npm test
+524 + 47 pass; build passes.
+
 ## Lab shell UI cleanup — 2026-10-16
 
 User asked for a neater, more professional simulator UI with fewer buttons, bubbles
@@ -43,6 +162,8 @@ Ref 04 Data Transfer Hub gained User -> UI and Cognito -> OpenID Connect; it sti
 UNSUPPORTED at UI -> AppSync because AppSync/Cognito/CloudFormation/ECR have no connection
 contracts (pre-existing; not faked). STRAY-005 now asserts zero strays across all refs/labs.
 Service nodes get a subtle drop-shadow on hover (.service-node-icon, index.css).
+Overlay fonts: .overlay-text (index.css) on Modal + ECS/EKS/ServiceBehavior explorer panels steps
+every text size up one notch inside dialogs; Modal title text-base, buttons text-sm.
 Verification: npm test 518 + 47 pass; build passes; headless Chrome check of stray notice, lab 5 hover,
 selected-node dots and constant Analysis height.
 

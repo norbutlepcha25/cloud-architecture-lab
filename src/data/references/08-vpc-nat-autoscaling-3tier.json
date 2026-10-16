@@ -157,7 +157,43 @@
         "az": "Multi-AZ",
         "subnet": "private",
         "replicas": 3,
-        "multiAz": true
+        "multiAz": true,
+        "iamRole": {
+          "id": "AppTierInstanceProfile",
+          "trustPolicy": {
+            "id": "AppTierInstanceProfile-trust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [],
+                "principals": [
+                  "ec2.amazonaws.com"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "AppTierInstanceProfile-permissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "s3:GetObject"
+                  ],
+                  "resources": [
+                    "arn:aws:s3:::node-s3-bucket/*"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {

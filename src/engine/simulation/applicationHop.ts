@@ -23,7 +23,11 @@ interface ApplicationHopInput {
 export function evaluateApplicationHop({ source, target, protocol, nodes, path, enforceIam, trace, connection }: ApplicationHopInput): boolean {
   const boundaryNodes = nodes.filter(node => node.type === 'boundaryNode');
   const edge = connection;
-  const routing = evaluateLiveRoute(source, target, nodes);
+  // Explicit-address routing runs only when the destination has a private IPv4 address. Internet,
+  // NAT and gateway-endpoint paths are evaluated by network/subnetRouting.ts in networkPath.ts.
+  const routing = target.data.networkIdentity?.privateIp !== undefined
+    ? evaluateLiveRoute(source, target, nodes)
+    : { outcome: 'legacy' as const, reason: '' };
   if (routing.outcome !== 'legacy') {
     const allowed = routing.outcome === 'allowed';
     trace.pushStep({ sourceNodeId: source.id, targetNodeId: target.id,

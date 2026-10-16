@@ -258,7 +258,52 @@
         "az": "Multi-AZ",
         "subnet": "global",
         "replicas": 5,
-        "multiAz": true
+        "multiAz": true,
+        "iamRole": {
+          "id": "DataTransferHubApiRole",
+          "trustPolicy": {
+            "id": "DataTransferHubApiRole-trust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [],
+                "principals": [
+                  "lambda.amazonaws.com"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "DataTransferHubApiRole-permissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "dynamodb:GetItem"
+                  ],
+                  "resources": [
+                    "arn:aws:dynamodb:::node-dynamodb"
+                  ]
+                },
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "resources": [
+                    "arn:aws:lambda:::node-step-lambda"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {

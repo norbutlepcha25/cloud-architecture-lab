@@ -139,7 +139,43 @@
         "az": "Multi-AZ",
         "subnet": "private",
         "replicas": 3,
-        "multiAz": true
+        "multiAz": true,
+        "iamRole": {
+          "id": "WebApiTaskRole",
+          "trustPolicy": {
+            "id": "WebApiTaskRole-trust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [],
+                "principals": [
+                  "ecs-tasks.amazonaws.com"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "WebApiTaskRole-permissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "sqs:SendMessage"
+                  ],
+                  "resources": [
+                    "arn:aws:sqs:::node-sqs"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -158,7 +194,14 @@
         "subnet": "private",
         "replicas": 1,
         "multiAz": true,
-        "notes": "Buffers requests"
+        "notes": "Buffers requests",
+        "customConfig": {
+          "redrivePolicy": {
+            "deadLetterTargetId": "node-sqs-dlq",
+            "maxReceiveCount": 5
+          },
+          "visibilityTimeoutSeconds": 60
+        }
       }
     },
     {
@@ -176,7 +219,45 @@
         "az": "Multi-AZ",
         "subnet": "private",
         "replicas": 2,
-        "multiAz": true
+        "multiAz": true,
+        "iamRole": {
+          "id": "WorkerTaskRole",
+          "trustPolicy": {
+            "id": "WorkerTaskRole-trust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [],
+                "principals": [
+                  "ecs-tasks.amazonaws.com"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "WorkerTaskRole-permissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "resources": [
+                    "arn:aws:sqs:::node-sqs"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -195,6 +276,50 @@
         "subnet": "private",
         "replicas": 2,
         "multiAz": true
+      }
+    },
+    {
+      "id": "node-sqs-endpoint",
+      "type": "serviceNode",
+      "position": {
+        "x": 560,
+        "y": 90
+      },
+      "data": {
+        "serviceId": "privatelink",
+        "label": "SQS interface endpoint",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "Multi-AZ",
+        "subnet": "private",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "endpointService": "sqs"
+        },
+        "notes": "Private DNS resolves the SQS endpoint inside the VPC; no NAT gateway needed."
+      }
+    },
+    {
+      "id": "node-sqs-dlq",
+      "type": "serviceNode",
+      "position": {
+        "x": 560,
+        "y": 380
+      },
+      "data": {
+        "serviceId": "sqs_dlq",
+        "label": "Orders DLQ",
+        "category": "Integration & Messaging",
+        "health": "healthy",
+        "az": "Multi-AZ",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "messageRetentionSeconds": 1209600
+        },
+        "notes": "Receives messages the worker fails to process 5 times; retention longer than the source queue."
       }
     }
   ],
@@ -275,6 +400,18 @@
         "interactionType": "synchronous",
         "isCriticalDependency": true,
         "timeoutMs": 4000
+      }
+    },
+    {
+      "id": "e-sqs-dlq",
+      "source": "node-sqs",
+      "target": "node-sqs-dlq",
+      "type": "custom",
+      "data": {
+        "protocol": "Message",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000
       }
     }
   ]

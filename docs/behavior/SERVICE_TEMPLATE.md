@@ -35,6 +35,11 @@ Specify caller/resource identity, VPC/subnet/ENI associations, route and firewal
 
 Separate desired/observed/effective state. Describe affected and surviving requests, recovery timing and assumptions, and explicitly unmodeled failures.
 
+## Explanation overlay
+
+For multi-step or asynchronous behavior, name the walkthrough builder (engine/explain/), its lanes,
+what-if toggles and tests. The overlay must be built from engine decisions and never edit the architecture.
+
 ## Trace and coverage
 
 List recorded decisions, source references, capability evidence, student explanations, and approximation disclosures.

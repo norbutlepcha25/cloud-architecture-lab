@@ -9,6 +9,8 @@ import { validateDependencies } from './dependencies.ts';
 import { validateServiceConfigurations } from './serviceConfig.ts';
 import { validateIam } from './iam.ts';
 import { validateProtocolCompatibility } from './protocol.ts';
+import { sqsConfigurationIssues } from '../messaging/sqs.ts';
+import { makeFinding } from '../findings.ts';
 
 export type { Finding, FindingSeverity, FindingCategory } from '../findings.ts';
 export { validateCidrs, validateNetwork, validateRules, validateDependencies, validateServiceConfigurations, validateIam, validateProtocolCompatibility };
@@ -31,6 +33,12 @@ export function validateArchitecture(
     ...validateDependencies(nodes, edges),
     ...validateServiceConfigurations(nodes),
     ...validateIam(nodes, edges),
-    ...validateProtocolCompatibility(nodes, edges)
+    ...validateProtocolCompatibility(nodes, edges),
+    // SQS queue attributes AWS rejects (engine/messaging/sqs.ts).
+    ...sqsConfigurationIssues(nodes, edges).map(issue => makeFinding('validation', 'messaging', {
+      severity: 'HIGH', resource: issue.label, resourceId: issue.nodeId, problem: issue.problem,
+      whyItMatters: 'AWS would reject this queue configuration.', awsRule: issue.rule,
+      recommendation: 'Change the queue setting in the SQS panel.'
+    }))
   ];
 }

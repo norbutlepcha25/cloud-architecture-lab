@@ -11,7 +11,10 @@ import { EksComponentPanel } from './EksComponentPanel.tsx';
 import { AsgPanel } from './AsgPanel.tsx';
 import { checkConnection, connectionProtocols, connectionOperations } from '../../engine/architecture/connectionContracts.ts';
 import { ManagedServicePanel } from './ManagedServicePanel.tsx';
-import { Ec2IamRolePanel } from './Ec2IamRolePanel.tsx';
+import { Ec2IamRolePanel, ROLE_PANEL_SERVICE_IDS } from './Ec2IamRolePanel.tsx';
+import { RouteTablePanel } from './RouteTablePanel.tsx';
+import { InternetGatewayPanel } from './InternetGatewayPanel.tsx';
+import { CodePipelinePanel, CodeCommitPanel, CodeBuildPanel, CodeDeployPanel, CicdRolePanel, CICD_ROLE_SERVICE_IDS } from './CicdPanels.tsx';
 import { createTeachingNacl } from '../../engine/network/naclPreset.ts';
 import { NetworkIdentityPanel } from './NetworkIdentityPanel.tsx';
 import { relationshipKind, type RelationshipKind } from '../../engine/architecture/relationships.ts';
@@ -22,6 +25,7 @@ import { LabConfigurationPanel } from './LabConfigurationPanel.tsx';
 import { ServiceBehaviorExplorer, BEHAVIOR_EXPLORER_SERVICES } from '../learning/ServiceBehaviorExplorer.tsx';
 import { EksExplorer } from '../eks/EksExplorer.tsx';
 import { EcsExplorer } from '../ecs/EcsExplorer.tsx';
+import { WalkthroughExplorer, WALKTHROUGH_SERVICES } from '../learning/WalkthroughExplorer.tsx';
 import { EcsConfigurationPanel } from './EcsConfigurationPanel.tsx';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
 import { SERVICE_MAP } from '../../data/serviceCatalog.ts';
@@ -80,6 +84,8 @@ export const ServiceInspector: React.FC = () => {
     addBoundaryNode,
     nodes,
     edges,
+    runFromNode,
+    scenario,
     simulationResult,
     activeStepIndex,
     setActiveStepIndex,
@@ -560,6 +566,18 @@ export const ServiceInspector: React.FC = () => {
           )}
 
           {['public_subnet', 'private_subnet'].includes(boundaryType) && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Route table</label>
+              <select aria-label="Subnet route table" className="w-full px-2 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900"
+                value={bData.networkIdentity?.routeTableId ?? ''}
+                onChange={e => { const identity = { ...bData.networkIdentity }; if (e.target.value) identity.routeTableId = e.target.value; else delete identity.routeTableId; updateNodeData(selectedNode.id, { networkIdentity: identity } as any); }}>
+                <option value="">None (assumed {boundaryType === 'public_subnet' ? 'public' : 'private'} routing)</option>
+                {nodes.filter(n => n.data?.serviceId === 'route_tables').map(n => <option key={n.id} value={n.id}>{n.data.label ?? n.id}</option>)}
+              </select>
+            </div>
+          )}
+
+          {['public_subnet', 'private_subnet'].includes(boundaryType) && (
             <div className="space-y-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1033,6 +1051,7 @@ export const ServiceInspector: React.FC = () => {
     <aside className="w-80 bg-white border-l border-slate-200 flex flex-col h-full flex-shrink-0 z-20 shadow-md overflow-hidden">
       {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'ecs' && <EcsExplorer key={selectedNode.id} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
       {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'eks' && <EksExplorer key={selectedNode.id} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
+      {serviceExplorerNodeId === selectedNode.id && WALKTHROUGH_SERVICES.includes(nodeData.serviceId) && <WalkthroughExplorer key={selectedNode.id} node={selectedNode} nodes={nodes} edges={edges} scenario={scenario} onClose={() => setServiceExplorerNodeId(null)} />}
       {!nodeData.customConfig?.canvasScalingDemo && serviceExplorerNodeId === selectedNode.id && BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId) && <ServiceBehaviorExplorer key={selectedNode.id} node={selectedNode} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
       {/* Header */}
       <div className="p-4 border-b border-slate-200 bg-white">
@@ -1056,7 +1075,7 @@ export const ServiceInspector: React.FC = () => {
           </button>
         </div>
 
-        {!nodeData.customConfig?.canvasScalingDemo && (['ecs', 'eks'].includes(nodeData.serviceId) || BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId)) && <button onClick={() => setServiceExplorerNodeId(selectedNode.id)} className="mt-3 w-full min-h-11 flex items-center justify-center gap-2 rounded-lg border border-circuit-600 bg-circuit-50 text-circuit-800 text-sm font-semibold hover:bg-circuit-100 focus-visible:outline-circuit-600">
+        {!nodeData.customConfig?.canvasScalingDemo && (['ecs', 'eks'].includes(nodeData.serviceId) || BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId) || WALKTHROUGH_SERVICES.includes(nodeData.serviceId)) && <button onClick={() => setServiceExplorerNodeId(selectedNode.id)} className="mt-3 w-full min-h-11 flex items-center justify-center gap-2 rounded-lg border border-circuit-600 bg-circuit-50 text-circuit-800 text-sm font-semibold hover:bg-circuit-100 focus-visible:outline-circuit-600">
           <Maximize2 size={16} aria-hidden="true" /> More information
         </button>}
         {/* Status Bar with Simulate Failure toggle */}
@@ -1471,11 +1490,17 @@ export const ServiceInspector: React.FC = () => {
             {/* SERVICE-SPECIFIC AWS CONFIGURATION (EC2, S3, RDS, etc.) */}
             {/* ---------------------------------------------------- */}
             {activeLabReference?.configurationChecks && nodeData.customConfig && <InspectorAccordion title="Course configuration"><LabConfigurationPanel key={selectedNode.id} config={nodeData.customConfig} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
-            {profile.configuration === 'routes' && <InspectorAccordion title="Route table configuration"><LabConfigurationPanel key={selectedNode.id} config={nodeData.customConfig ?? { routeTable: { routes: [] } }} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {profile.configuration === 'pipeline' && <InspectorAccordion title="Pipeline"><CodePipelinePanel node={selectedNode} nodes={nodes} edges={edges} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
+            {profile.configuration === 'repo' && <InspectorAccordion title="Repository"><CodeCommitPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
+            {profile.configuration === 'build' && <InspectorAccordion title="Build project"><CodeBuildPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
+            {profile.configuration === 'deploy' && <InspectorAccordion title="Deployment group"><CodeDeployPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onInstance={(id, patch) => { const target = nodes.find(n => n.id === id); updateNodeData(id, { customConfig: { ...(target?.data as any)?.customConfig, ...patch } }); }} /></InspectorAccordion>}
+            {CICD_ROLE_SERVICE_IDS.includes(nodeData.serviceId) && <InspectorAccordion title="Service role"><CicdRolePanel node={selectedNode} onRole={iamRole => updateNodeData(selectedNode.id, { iamRole })} /></InspectorAccordion>}
+            {profile.configuration === 'igw' && <InspectorAccordion title="Internet gateway attachment"><InternetGatewayPanel key={selectedNode.id} node={selectedNode} nodes={nodes} onChange={patch => updateNodeData(selectedNode.id, patch)} /></InspectorAccordion>}
+            {profile.configuration === 'routes' && <InspectorAccordion title="Routes and subnet associations"><RouteTablePanel key={selectedNode.id} node={selectedNode} nodes={nodes} onRoutes={routes => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, routeTable: { ...(nodeData.customConfig?.routeTable ?? {}), routes } } })} onAssociate={(subnetId, routeTableId) => { const subnet = nodes.find(n => n.id === subnetId); const identity = { ...(subnet?.data as any)?.networkIdentity }; if (routeTableId) identity.routeTableId = routeTableId; else delete identity.routeTableId; updateNodeData(subnetId, { networkIdentity: identity } as any); }} /></InspectorAccordion>}
             {profile.configuration === 'operations' && <InspectorAccordion title={`${serviceDef.name} operations`}><ManagedServicePanel key={selectedNode.id} /></InspectorAccordion>}
-            {profile.configuration === 'instance' && <InspectorAccordion title="EC2 IAM role"><Ec2IamRolePanel key={selectedNode.id} data={nodeData} nodes={nodes} onChange={iamRole => updateNodeData(selectedNode.id, { iamRole })} /></InspectorAccordion>}
+            {ROLE_PANEL_SERVICE_IDS.includes(nodeData.serviceId) && <InspectorAccordion title="IAM role"><Ec2IamRolePanel key={selectedNode.id} node={selectedNode} nodes={nodes} edges={edges} onChange={iamRole => updateNodeData(selectedNode.id, { iamRole })} /></InspectorAccordion>}
             {profile.network && <InspectorAccordion title="Network identity"><NetworkIdentityPanel data={nodeData} nodes={nodes} onChange={networkIdentity => updateNodeData(selectedNode.id, { networkIdentity })} /></InspectorAccordion>}
-            {profile.configuration === 'endpoint' && <InspectorAccordion title="VPC endpoint configuration"><EndpointConfigurationPanel data={nodeData} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {profile.configuration === 'endpoint' && <InspectorAccordion title="VPC endpoint configuration"><EndpointConfigurationPanel data={nodeData} nodes={nodes} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
             {profile.configuration === 'eks' && <InspectorAccordion title="EKS cluster and workload"><EksConfigurationPanel data={nodeData} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
             {profile.configuration === 'ecs' && <InspectorAccordion title="ECS service configuration"><EcsConfigurationPanel data={nodeData} onChange={(customConfig) => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
             {(profile.configuration === 'scaling' || (nodeData.serviceId === 'cloudwatch' && nodes.some(node => node.data.serviceId === 'ec2_auto_scaling' && node.data.customConfig?.asg?.alarmId === selectedNode.id))) && <InspectorAccordion title="EC2 Auto Scaling"><AsgPanel key={`asg-${selectedNode.id}`} /></InspectorAccordion>}

@@ -2,6 +2,7 @@ import { isEksManagementPair } from './eksRelationships.ts';
 import type { Node } from '@xyflow/react';
 import type { ConnectionData, ProtocolType } from '../../types/index.ts';
 import { relationshipKind } from './relationships.ts';
+import { SERVICE_ACTIONS } from '../iam/roleBuilder.ts';
 /** Explicit educational interaction contracts. Missing services are UNKNOWN, never inferred from metadata. */
 const inputs: Record<string, ProtocolType[]> = {
   amplify: ['HTTPS', 'HTTP'],
@@ -17,7 +18,8 @@ const inputs: Record<string, ProtocolType[]> = {
   user: ['HTTPS', 'HTTP', 'TCP'], api_client: ['HTTPS', 'HTTP', 'TCP'], client_ui: ['HTTPS', 'HTTP'],
   waf: ['HTTPS', 'HTTP'], eventbridge: ['HTTPS', 'Event'], step_functions: ['HTTPS', 'Event']
 };
-const operations: Record<string, string[]> = { s3: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'], sqs: ['sqs:SendMessage'], sns: ['sns:Publish'], dynamodb: ['dynamodb:GetItem', 'dynamodb:PutItem'], lambda: ['lambda:InvokeFunction'] };
+/** Supported operations per target: shared with the IAM role builder (engine/iam/roleBuilder.ts). */
+const operations: Record<string, string[]> = SERVICE_ACTIONS;
 /** Explicit bounded interaction coverage, independent of catalog metadata. */
 export function hasConnectionContract(serviceId: string): boolean { return Object.prototype.hasOwnProperty.call(inputs, serviceId); }
 /** Canvas defaults must distinguish control-plane links from application traffic. */
@@ -35,6 +37,28 @@ export function isManagementPair(source?: Node<any>, target?: Node<any>): boolea
     || (from === 'cloudwatch' && to === 'ec2_auto_scaling')
     || (from === 'alb' && to === 'cloudwatch');
 }
+/** CI/CD control-plane relationships (CodePipeline actions, CodeBuild inputs/outputs, CodeDeploy
+ * targets, service-role illustrations). Executed only by engine/cicd/pipeline.ts, never as a
+ * request hop. Each entry: [source serviceIds, target serviceIds, meaning]. */
+const CICD_PAIRS: [string[], string[], string][] = [
+  [['codecommit', 's3', 'ecr_registry'], ['codepipeline'], 'Pipeline source action: a change here starts the pipeline.'],
+  [['codecommit', 's3'], ['codebuild'], 'Build project source.'],
+  [['codepipeline'], ['codebuild'], 'Pipeline build/test action runs this project.'],
+  [['codepipeline'], ['codedeploy', 'ecs', 'fargate'], 'Pipeline deploy action.'],
+  [['codepipeline'], ['s3'], 'Pipeline artifact store.'],
+  [['codebuild'], ['s3'], 'Build artifact output.'],
+  [['codebuild'], ['ecr_registry'], 'Build pushes a container image (needs privileged mode and ECR permissions).'],
+  [['codebuild'], ['cloudwatch'], 'Build logs (CloudWatch Logs).'],
+  [['codebuild'], ['codedeploy', 'codepipeline'], 'Build output consumed by the next deploy action.'],
+  [['codedeploy'], ['ec2', 'ec2_auto_scaling', 'ecs', 'fargate', 'lambda', 'alb', 'nlb'], 'CodeDeploy deployment group target.'],
+  [['iam'], ['codepipeline', 'codebuild', 'codedeploy'], 'Service role illustration; attach the role in the IAM role panel to evaluate it.'],
+  [['sqs'], ['sqs', 'sqs_dlq'], 'Dead-letter queue (redrive policy): messages received more than maxReceiveCount times move here.']
+];
+export function cicdRelationship(source?: Node<any>, target?: Node<any>): string | undefined {
+  if (!source || !target) return undefined;
+  return CICD_PAIRS.find(([from, to]) => from.includes(source.data.serviceId) && to.includes(target.data.serviceId))?.[2];
+}
+
 export function connectionProtocols(source?: Node<any>, target?: Node<any>): ProtocolType[] {
   if (!source || !target) return [];
   const result = inputs[target.data.serviceId] ?? [];
@@ -56,6 +80,8 @@ export function checkConnection(source: Node<any> | undefined, target: Node<any>
   if (kind === 'manages') return isManagementPair(source, target) ? { status: 'valid', reason: 'Management relationship; not request traffic.' } : { status: 'unknown', reason: 'Management relationship behavior is not modeled for this pair.' };
   if (kind === 'route-association' || kind === 'target-registration') return { status: 'unknown', reason: 'Structural relationship is not executable request traffic.' };
   if (source.type === 'boundaryNode' || target.type === 'boundaryNode') return bad('Boundary containers cannot send or receive application requests.');
+  const cicd = cicdRelationship(source, target);
+  if (cicd) return { status: 'valid', reason: `Control-plane relationship: ${cicd} It is evaluated by its service, not as a network request.` };
   if (!inputs[source.data.serviceId] || !inputs[target.data.serviceId]) return { status: 'unknown', reason: 'Behavior not modeled: this service pair has no verified connection contract.' };
   if (data?.protocol === undefined) return { status: 'unknown', reason: 'Specify an interaction before running this connection.' };
   if (String(data.protocol) === 'S3 API' && target.data.serviceId === 's3') return { status: 'valid', reason: 'Legacy S3 API alias for HTTPS object access.' };

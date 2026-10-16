@@ -33,6 +33,6 @@ export function NetworkIdentityPanel({ data, nodes, onChange }: {
         {nodes.filter(node => node.data.serviceId === 'route_tables').map(node => <option key={node.id} value={node.id}>{node.data.label ?? node.id}</option>)}
       </select>
     </label>
-    <p className="text-xs text-slate-500">Explicit routing currently evaluates local IPv4 paths. Other transit types report unsupported. AWS associates route tables with subnets; this resource override is a simulator convenience.</p>
+    <p className="text-xs text-slate-500">Internet, NAT and gateway endpoint routes follow the subnet route table. Route lookups between private IPv4 addresses use local routes only. AWS associates route tables with subnets; this resource override is a simulator convenience.</p>
   </section>;
 }

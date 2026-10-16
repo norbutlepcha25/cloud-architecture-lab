@@ -160,7 +160,43 @@
         "az": "Multi-AZ",
         "subnet": "private",
         "replicas": 2,
-        "multiAz": true
+        "multiAz": true,
+        "iamRole": {
+          "id": "PetsTaskRole",
+          "trustPolicy": {
+            "id": "PetsTaskRole-trust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [],
+                "principals": [
+                  "ecs-tasks.amazonaws.com"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "PetsTaskRole-permissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "dynamodb:GetItem"
+                  ],
+                  "resources": [
+                    "arn:aws:dynamodb:::node-dynamodb-pets"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -214,7 +250,43 @@
         "az": "Multi-AZ",
         "subnet": "private",
         "replicas": 2,
-        "multiAz": true
+        "multiAz": true,
+        "iamRole": {
+          "id": "FoodsTaskRole",
+          "trustPolicy": {
+            "id": "FoodsTaskRole-trust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [],
+                "principals": [
+                  "ecs-tasks.amazonaws.com"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "FoodsTaskRole-permissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "dynamodb:GetItem"
+                  ],
+                  "resources": [
+                    "arn:aws:dynamodb:::node-dynamodb-foods"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -251,6 +323,28 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": true
+      }
+    },
+    {
+      "id": "node-dynamodb-endpoint",
+      "type": "serviceNode",
+      "position": {
+        "x": 700,
+        "y": 250
+      },
+      "data": {
+        "serviceId": "s3_gateway_endpoint",
+        "label": "DynamoDB gateway endpoint",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "Multi-AZ",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "endpointService": "dynamodb"
+        },
+        "notes": "Private route from the ECS tasks to DynamoDB without a NAT gateway."
       }
     }
   ],

@@ -6,7 +6,8 @@ import { eksConfiguration } from '../../engine/service/models/eks.ts';
 const configurations: Record<string, string> = {
   ec2: 'instance', s3: 'bucket', s3_client: 'bucket', s3_managed: 'bucket',
   rds: 'database', aurora: 'database', lambda: 'function', step_lambda: 'function',
-  ecs: 'ecs', eks: 'eks', route_tables: 'routes',
+  ecs: 'ecs', eks: 'eks', route_tables: 'routes', internet_gateway: 'igw',
+  codepipeline: 'pipeline', codecommit: 'repo', codebuild: 'build', codedeploy: 'deploy',
   s3_gateway_endpoint: 'endpoint', privatelink: 'endpoint',
   sqs: 'operations', sns: 'operations', cloudwatch: 'operations', cloudtrail: 'operations',
   ec2_auto_scaling: 'scaling'

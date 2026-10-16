@@ -121,6 +121,8 @@ interface ArchitectureContextType {
   activeStepIndex: number | null;
   setActiveStepIndex: (index: number | null) => void;
   runScenario: () => void;
+  /** Runs from a specific resource without changing the saved request start (e.g. Run pipeline). */
+  runFromNode: (nodeId: string) => void;
   resetSimulation: () => void;
   stepForward: () => void;
   stepBackward: () => void;
@@ -1108,6 +1110,16 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     setAppMode('simulate');
   }, [evaluateCurrentScenario, effectiveNodes, effectiveEdges, nodes, edges, activeLabReference]);
 
+  const runFromNode = useCallback((nodeId: string) => {
+    const result = runSimulation(effectiveNodes, effectiveEdges, { ...scenario, startNodeId: nodeId });
+    track('simulation_run', { page: 'lab', success: result.success });
+    setSimulationResult(result);
+    setActiveStepIndex(0);
+    setHoveredStepIndex(null);
+    setHighlightTaskFlow(true);
+    setIsPlaying(true);
+  }, [effectiveNodes, effectiveEdges, scenario]);
+
   // Toggle Task Flow lines on/off with smart auto-simulation
   const toggleTaskFlow = useCallback(() => {
     setHighlightTaskFlow((prev) => {
@@ -1484,6 +1496,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         activeStepIndex,
         setActiveStepIndex,
         runScenario,
+        runFromNode,
         resetSimulation,
         stepForward,
         stepBackward,

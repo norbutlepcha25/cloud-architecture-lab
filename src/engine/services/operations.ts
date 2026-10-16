@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import { carriesRequest } from '../architecture/relationships.ts';
 export const OPERATION_SERVICES = ['sqs', 'sns', 'cloudwatch', 'cloudtrail'];
-export interface Message { id: string; body: string; visibleAt: number; receives: number; receipt?: string }
+export interface Message { id: string; body: string; visibleAt: number; receives: number; receipt?: string; sentAt?: number }
 export interface Runtime { now: number; sequence: number; messages: Message[]; records: Record<string, unknown>[]; alarm: 'OK' | 'ALARM' | 'INSUFFICIENT_DATA'; trace: string[] }
 export type Operation = 'send' | 'receive' | 'delete' | 'advance' | 'publish' | 'metric' | 'audit';
 export interface Input { body?: string; value?: number; seconds?: number; receipt?: string; action?: string; category?: 'management' | 'data'; attributes?: Record<string, string> }
@@ -21,7 +21,9 @@ export function operate(nodes: Node<any>[], edges: Edge<any>[], nodeId: string, 
     const cfg = queue.data.customConfig ??= {};
     if (cfg.queueType === 'fifo') throw new Error('FIFO ordering/deduplication is not supported yet; use a standard queue.');
     const runtime: Runtime = cfg.serviceRuntime ??= initialRuntime();
-    runtime.messages.push({ id: `${queue.id}-${++runtime.sequence}`, body, visibleAt: runtime.now, receives: 0 });
+    // DelaySeconds hides a new message until the delay passes (0–900 s).
+    const delay = Number(cfg.delaySeconds ?? 0);
+    runtime.messages.push({ id: `${queue.id}-${++runtime.sequence}`, body, visibleAt: runtime.now + (Number.isFinite(delay) ? delay : 0), receives: 0, sentAt: runtime.now });
   };
   const publish = (topic: Node<any>, body: string) => {
     if (topic.data.health === 'failed') { note(`SNS ${topic.data.label}: delivery unavailable.`); return; }
@@ -61,6 +63,11 @@ export function operate(nodes: Node<any>[], edges: Edge<any>[], nodeId: string, 
       const seconds = input.seconds ?? 30;
       if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Clock advance must be a nonnegative number.');
       state.now += seconds; note(`Simulation clock: ${state.now}s. Undeleted messages reappear after visibility timeout.`);
+      // Messages older than the retention period are deleted by SQS (60 s – 14 days, default 4 days).
+      const retention = Number(config.messageRetentionSeconds ?? 345600);
+      const before = state.messages.length;
+      state.messages = state.messages.filter((m: Message) => state.now - (m.sentAt ?? 0) < retention);
+      if (state.messages.length < before) note(`${before - state.messages.length} message(s) expired after the ${retention}s retention period.`);
     } else throw new Error('Unsupported SQS operation.');
   } else if (node.data.serviceId === 'sns') {
     if (operation !== 'publish') throw new Error('Use Publish for SNS.');

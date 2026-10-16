@@ -59,7 +59,7 @@ export function Modal({ isOpen, onClose, title, meta, size = 'lg', footer, close
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`w-full ${WIDTHS[size]} ${HEIGHTS[size]} flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none`}
+        className={`overlay-text w-full ${WIDTHS[size]} ${HEIGHTS[size]} flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none`}
         onKeyDown={event => {
           event.stopPropagation();
           if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
@@ -71,10 +71,10 @@ export function Modal({ isOpen, onClose, title, meta, size = 'lg', footer, close
           else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }}
       >
-        <header className="flex items-center justify-between gap-4 px-5 h-12 shrink-0 border-b border-slate-200">
+        <header className="flex items-center justify-between gap-4 px-5 h-14 shrink-0 border-b border-slate-200">
           <div className="flex items-baseline gap-2 min-w-0">
-            <h2 id={titleId} className="text-sm font-semibold text-slate-900 truncate">{title}</h2>
-            {meta && <span className="text-xs text-slate-500 truncate">{meta}</span>}
+            <h2 id={titleId} className="text-base font-semibold text-slate-900 truncate">{title}</h2>
+            {meta && <span className="text-sm text-slate-500 truncate">{meta}</span>}
           </div>
           <button type="button" onClick={onClose} aria-label={closeLabel} className="p-1.5 -mr-1.5 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100">
             <X className="w-4 h-4" />
@@ -89,6 +89,6 @@ export function Modal({ isOpen, onClose, title, meta, size = 'lg', footer, close
 
 /** Button styles shared by overlay footers and bodies. */
 export const modalButton = {
-  primary: 'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-[#232F3E] hover:bg-[#1A232E] text-white text-xs font-medium disabled:opacity-40 transition-colors',
-  secondary: 'inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium disabled:opacity-40 transition-colors'
+  primary: 'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-[#232F3E] hover:bg-[#1A232E] text-white text-sm font-medium disabled:opacity-40 transition-colors',
+  secondary: 'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium disabled:opacity-40 transition-colors'
 };

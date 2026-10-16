@@ -7,6 +7,9 @@ import { ServiceLearningPanel } from './ServiceLearningPanel.tsx';
 import { LoadBalancerLesson } from './LoadBalancerLesson.tsx';
 import { ScalingPolicyLesson } from './ScalingPolicyLesson.tsx';
 import { EventBridgeLesson } from './EventBridgeLesson.tsx';
+import { WalkthroughView } from './WalkthroughView.tsx';
+import { sqsWalkthrough } from '../../engine/explain/walkthrough.ts';
+import { useState } from 'react';
 
 export const BEHAVIOR_EXPLORER_SERVICES = ['alb', 'nlb', 'cloudwatch', 'sqs', 'ec2_auto_scaling', 'auto_scaling_mgmt', 'eventbridge', 'eventbridge_scheduler', 'iam', 'ec2', 'ecr_registry'];
 export function ServiceBehaviorExplorer({ node, nodes, edges, onUpdate, onClose }: {
@@ -26,7 +29,7 @@ export function ServiceBehaviorExplorer({ node, nodes, edges, onUpdate, onClose 
     return () => { document.body.style.overflow = overflow; previous?.focus(); };
   }, []);
   return createPortal(<div className="fixed inset-0 z-[11000] bg-slate-950/40 p-2 sm:p-4 flex items-center justify-center" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="service-behavior-title" tabIndex={-1} className="w-full max-w-6xl h-[92dvh] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none" onKeyDown={e => {
+    <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="service-behavior-title" tabIndex={-1} className="overlay-text w-full max-w-6xl h-[92dvh] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none" onKeyDown={e => {
       e.stopPropagation();
       if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       if (e.key === 'Tab') {
@@ -41,6 +44,7 @@ export function ServiceBehaviorExplorer({ node, nodes, edges, onUpdate, onClose 
       <div className="flex-1 min-h-0 grid lg:grid-cols-[minmax(0,1fr)_340px] overflow-y-auto lg:overflow-hidden">
         <main className="min-w-0 p-5 bg-slate-50 lg:overflow-y-auto">
           {isBalancer && <LoadBalancerLesson kind={service as 'alb' | 'nlb'} />}
+          {service === 'sqs' && <SqsLifecycle node={node} nodes={nodes} edges={edges} />}
           {isScaling && <ScalingPolicyLesson source={service as 'cloudwatch' | 'sqs' | 'ec2_auto_scaling' | 'auto_scaling_mgmt'} />}
           {isEvent && <EventBridgeLesson scheduler={service === 'eventbridge_scheduler'} />}
           {!isBalancer && !isScaling && !isEvent && <div className="space-y-4 text-sm">
@@ -57,4 +61,13 @@ export function ServiceBehaviorExplorer({ node, nodes, edges, onUpdate, onClose 
       </div>
     </div>
   </div>, document.body);
+}
+
+function SqsLifecycle({ node, nodes, edges }: { node: Node<ServiceNodeData>; nodes: Node<ServiceNodeData>[]; edges: Edge[] }) {
+  const [consumerFails, setConsumerFails] = useState<boolean | undefined>(undefined);
+  const walkthrough = React.useMemo(() => sqsWalkthrough(node, nodes, edges as any, { consumerFails }), [node, nodes, edges, consumerFails]);
+  return <div className="mb-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+    <label className="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={consumerFails === true} onChange={e => setConsumerFails(e.target.checked ? true : undefined)} />What if the consumer fails to process the message</label>
+    <WalkthroughView walkthrough={walkthrough} ariaLabel="SQS message lifecycle" />
+  </div>;
 }

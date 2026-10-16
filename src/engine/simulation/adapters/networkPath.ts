@@ -3,11 +3,36 @@ import { TERMINATE, advanceTo } from './types.ts';
 import { evaluateEndpoint } from '../../network/vpcEndpoint.ts';
 import { resolveNatEgress } from '../../network/nat.ts';
 import { eksConfiguration } from '../../service/models/eks.ts';
+import { evaluateInternetEgress, evaluateInternetIngress, isIgwDetached, type RoutingDecision } from '../../network/subnetRouting.ts';
+import { findContainingSubnetBoundary } from '../../layout/containment.ts';
 
 const VPC_HOSTED_INGRESS_SERVICE_IDS = ['alb', 'nlb', 'api_gateway', 'app_runner', 'ec2', 'ecs', 'fargate'];
 const INGRESS_PROXY_SERVICE_IDS = ['alb', 'nlb', 'api_gateway', 'cloudfront'];
 const MANAGED_EVENT_TARGET_SERVICE_IDS = ['lambda', 'sns', 'sqs', 'eventbridge', 'step_functions'];
 const ENDPOINT_SERVICE_IDS = ['privatelink', 's3_gateway_endpoint'];
+
+/** Records a route-table decision; returns true when it stopped the request. */
+function recordRoute(ctx: AdapterContext, from: { id: string; data: any }, to: { id: string; data: any }, decision: RoutingDecision, action: string): boolean {
+  const { trace, nodes } = ctx;
+  const hop = decision.hopNodeId ? nodes.find(n => n.id === decision.hopNodeId) : undefined;
+  const allowed = decision.outcome === 'allowed';
+  const status = decision.outcome === 'invalid' ? 400 : decision.privateSubnet ? 403 : 504;
+  trace.pushStep({
+    sourceNodeId: from.id, targetNodeId: (hop ?? to).id,
+    sourceNodeName: from.data.label, targetNodeName: (hop ?? to).data.label,
+    protocol: 'TCP', action: allowed ? action : `${action}: no route`,
+    status: allowed ? 'success' : 'failed', explanation: decision.reason,
+    targetHealth: allowed ? (hop ?? to).data.health : 'failed', latencyMs: allowed ? 2 : 10,
+    details: allowed ? undefined : { statusCode: status, failureReason: decision.reason,
+      decision: { order: 1, component: 'Route', resource: decision.routeTableId ?? 'N/A', operation: 'evaluate-route',
+        input: { action }, decision: 'DENY', reason: decision.reason, simpleExplanation: decision.reason,
+        awsRule: 'Traffic leaves or enters a subnet only through routes in its associated route table (longest prefix match). https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Route_Tables.html',
+        metadata: { routeTableId: decision.routeTableId } } }
+  });
+  if (allowed) { trace.advanceTime(2); return false; }
+  trace.fail(status, decision.reason);
+  return true;
+}
 
 /**
  * The generic hop-resolution path: picks the next node, then walks through every structural
@@ -63,7 +88,7 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   if (node.data.serviceId === 'cloudfront' && node.data.customConfig?.vpcOriginId) {
     const valid = node.data.customConfig.vpcOriginId === nextNode.id &&
       nextNode.data.customConfig?.scheme === 'internal' &&
-      nodes.some(n => n.data.serviceId === 'internet_gateway');
+      nodes.some(n => n.data.serviceId === 'internet_gateway' && !isIgwDetached(n));
     trace.pushStep({ sourceNodeId: node.id, targetNodeId: nextNode.id,
       sourceNodeName: node.data.label, targetNodeName: nextNode.data.label,
       protocol: 'HTTPS', action: 'CloudFront VPC origin prerequisites',
@@ -82,8 +107,20 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   const isPublicOrigin = ['user', 'client_ui', 'api_client'].includes(node.data.serviceId) || node.data.subnet === 'global';
   const isVpcHostedPublicTarget = nextNode.data.subnet === 'public' && VPC_HOSTED_INGRESS_SERVICE_IDS.includes(nextNode.data.serviceId);
 
-  if (isPublicOrigin && isVpcHostedPublicTarget) {
-    const igw = nodes.find(n => n.data.serviceId === 'internet_gateway');
+  // Route-table driven ingress when the target's subnet has an explicit route table.
+  const inSubnet = Boolean(findContainingSubnetBoundary(nextNode, nodes));
+  // Internet clients always; AWS-managed origins only toward public subnets (an internal target
+  // reached through a CloudFront VPC origin or similar private integration does not use the IGW).
+  const isInternetClient = ['user', 'client_ui', 'api_client'].includes(node.data.serviceId);
+  const privateOrigin = node.data.serviceId === 'cloudfront' && node.data.customConfig?.vpcOriginId === nextNode.id;
+  const ingress = inSubnet && !privateOrigin && VPC_HOSTED_INGRESS_SERVICE_IDS.includes(nextNode.data.serviceId)
+    && (isInternetClient || (isPublicOrigin && nextNode.data.subnet === 'public'))
+    ? evaluateInternetIngress(nextNode, nodes, { assume: ctx.scenario.assumeRouteTables }) : undefined;
+  const explicitIngress = ingress && ingress.outcome !== 'legacy';
+  if (explicitIngress && recordRoute(ctx, node, nextNode, ingress!, 'Route table: internet gateway')) return TERMINATE;
+
+  if (!explicitIngress && isPublicOrigin && isVpcHostedPublicTarget) {
+    const igw = nodes.find(n => n.data.serviceId === 'internet_gateway' && !isIgwDetached(n));
 
     if (!igw) {
       trace.pushStep({
@@ -116,7 +153,7 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
         protocol: 'TCP',
         action: 'Internet Gateway Outage',
         status: 'failed',
-        explanation: `CRITICAL OUTAGE: Internet Gateway [${igw.data.label}] is offline/unhealthy. The VPC has lost its only path to and from the internet; ${nextNode.data.label} is unreachable.`,
+        explanation: `Internet Gateway [${igw.data.label}] is marked failed, so ${nextNode.data.label} is unreachable from the internet. Teaching scenario: AWS internet gateways are horizontally scaled and highly available, and AWS documents no outage mode.`,
         targetHealth: 'failed',
         latencyMs: 10,
         details: {
@@ -157,7 +194,7 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   }
 
   // 7B: Direct Public Ingress into Private Subnet Check
-  if (isPublicOrigin && isPrivateTarget && !isIngressProxy) {
+  if (!explicitIngress && isPublicOrigin && isPrivateTarget && !isIngressProxy) {
     trace.pushStep({
       sourceNodeId: node.id,
       targetNodeId: nextNode.id,
@@ -184,7 +221,17 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
     !ENDPOINT_SERVICE_IDS.includes(node.data.serviceId);
   const isExternalTarget = nextNode.data.subnet === 'global' || ['api_client', 'user'].includes(nextNode.data.serviceId);
 
-  if (isPrivateSource && isExternalTarget && !['rds', 'dynamodb'].includes(nextNode.data.serviceId)) {
+  // Route-table driven egress when the source's subnet has an explicit route table.
+  const egress = isExternalTarget && !ENDPOINT_SERVICE_IDS.includes(node.data.serviceId) && !['rds'].includes(nextNode.data.serviceId)
+    ? evaluateInternetEgress(node, nextNode.data.serviceId, nodes, { assume: ctx.scenario.assumeRouteTables }) : undefined;
+  const explicitEgress = egress && egress.outcome !== 'legacy';
+  if (explicitEgress) {
+    const action = egress!.via === 'interface-endpoint' ? 'Interface VPC endpoint (private DNS)' : egress!.via === 'gateway-endpoint' ? 'Route table: gateway endpoint (prefix list)'
+      : egress!.via === 'nat' ? 'Route table: NAT gateway (SNAT)' : 'Route table: internet gateway';
+    if (recordRoute(ctx, node, nextNode, egress!, egress!.outcome === 'allowed' ? action : 'Route table: internet egress')) return TERMINATE;
+  }
+
+  if (!explicitEgress && isPrivateSource && isExternalTarget && !['rds', 'dynamodb'].includes(nextNode.data.serviceId)) {
     const vpcEndpoint = nodes.find(n => ENDPOINT_SERVICE_IDS.includes(n.data.serviceId) && evaluateEndpoint(n.data, nextNode.data.serviceId).allowed);
     const natGateway = nodes.find(n => n.data.serviceId === 'nat_gateway');
 

@@ -15,6 +15,7 @@ import { LabsModal } from './components/labs/LabsModal.tsx';
 import { ExportModal } from './components/export/ExportModal.tsx';
 import { CostEstimatorModal } from './components/cost/CostEstimatorModal.tsx';
 import { NaclSideColumn } from './components/inspector/NaclSideColumn.tsx';
+import { RightPanel } from './components/layout/RightPanel.tsx';
 import { useTheme } from './utils/theme.ts';
 
 const AppContent: React.FC<{ onHome: () => void }> = ({ onHome }) => {
@@ -69,11 +70,13 @@ const AppContent: React.FC<{ onHome: () => void }> = ({ onHome }) => {
         </main>
 
         {/* Right Side Column: Either NACL Rule Column or Service Inspector */}
-        {showNaclSideColumn ? (
-          <NaclSideColumn onClose={() => setShowNaclSideColumn(false)} />
-        ) : (
-          <ServiceInspector />
-        )}
+        <RightPanel>
+          {showNaclSideColumn ? (
+            <NaclSideColumn onClose={() => setShowNaclSideColumn(false)} />
+          ) : (
+            <ServiceInspector />
+          )}
+        </RightPanel>
       </div>
 
       <AppFooter />

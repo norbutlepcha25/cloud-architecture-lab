@@ -206,9 +206,12 @@ export interface SimulationScenario {
   startNodeId: string;
   trafficLevel: 'low' | 'normal' | 'high' | 'very_high' | '10x' | '100x';
   simulateFailureCascade?: boolean;
+  /** Subnets with no route table association behave like a standard public/private setup.
+   *  false = they get only the VPC local route (AWS main route table of a new VPC). Default true. */
+  assumeRouteTables?: boolean;
 }
 
-export type SimulationResultKind = 'request' | 'configuration-check' | 'authorization-check';
+export type SimulationResultKind = 'request' | 'configuration-check' | 'authorization-check' | 'workflow';
 export type SimulationOutcome = 'success' | 'failure' | 'denied' | 'unsupported';
 
 export interface SimulationResult {
