@@ -1,309 +1,361 @@
 {
   "id": "lab4-private-tasks",
-  "title": "Reference request",
-  "description": "Load the course resource layout and explore a supported request path.",
-  "expected": "SUCCESS on the reference request; inspect each recorded decision.",
+  "category": "My references",
+  "difficulty": "Beginner",
+  "description": "User-created architecture snapshot.",
+  "learningOutcome": "",
+  "name": "LAB-04-ECS-USMS-ENROLMENT",
   "nodes": [
     {
-      "id": "lab-vpc",
+      "id": "box-vpc",
       "type": "boundaryNode",
       "position": {
-        "x": 180,
-        "y": 20
-      },
-      "style": {
-        "width": 1040,
-        "height": 1100
+        "x": -2,
+        "y": 44
       },
       "data": {
         "label": "usms-vpc",
         "boundaryType": "vpc",
-        "width": 1040,
-        "height": 1100,
-        "cidr": "10.0.0.0/16"
-      }
-    },
-    {
-      "id": "lab-public-a",
-      "type": "boundaryNode",
-      "position": {
-        "x": 210,
-        "y": 240
+        "cidr": "10.0.0.0/16",
+        "width": 1562,
+        "height": 856,
+        "isSimulating": false,
+        "simulationStatus": "idle"
       },
       "style": {
-        "width": 440,
-        "height": 260
+        "width": 1562,
+        "height": 856
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -4,
+      "measured": {
+        "width": 1562,
+        "height": 856
+      },
+      "selected": false,
+      "width": 1562,
+      "height": 856,
+      "resizing": false
+    },
+    {
+      "id": "box-public-subnet-a",
+      "type": "boundaryNode",
+      "position": {
+        "x": 120,
+        "y": 80
       },
       "data": {
-        "label": "usms-public-subnet-a · AZ-A",
+        "label": "usms-public-subnet-a (us-east-1a)",
         "boundaryType": "public_subnet",
-        "width": 440,
-        "height": 260,
-        "cidr": "10.0.1.0/24",
-        "az": "AZ-A"
-      }
-    },
-    {
-      "id": "lab-public-b",
-      "type": "boundaryNode",
-      "position": {
-        "x": 700,
-        "y": 240
-      },
-      "style": {
-        "width": 440,
-        "height": 260
-      },
-      "data": {
-        "label": "usms-public-subnet-b · AZ-B",
-        "boundaryType": "public_subnet",
-        "width": 440,
-        "height": 260,
-        "cidr": "10.0.2.0/24",
-        "az": "AZ-B"
-      }
-    },
-    {
-      "id": "lab-private-a",
-      "type": "boundaryNode",
-      "position": {
-        "x": 210,
-        "y": 560
-      },
-      "style": {
-        "width": 440,
-        "height": 320
-      },
-      "data": {
-        "label": "usms-private-subnet-a · AZ-A",
-        "boundaryType": "private_subnet",
-        "width": 440,
-        "height": 320,
-        "cidr": "10.0.3.0/24",
-        "az": "AZ-A"
-      }
-    },
-    {
-      "id": "lab-private-b",
-      "type": "boundaryNode",
-      "position": {
-        "x": 700,
-        "y": 560
-      },
-      "style": {
-        "width": 440,
-        "height": 320
-      },
-      "data": {
-        "label": "usms-private-subnet-b · AZ-B",
-        "boundaryType": "private_subnet",
-        "width": 440,
-        "height": 320,
-        "cidr": "10.0.4.0/24",
-        "az": "AZ-B"
-      }
-    },
-    {
-      "id": "lab-endpoint",
-      "type": "serviceNode",
-      "position": {
-        "x": 900,
-        "y": 940
-      },
-      "data": {
-        "serviceId": "s3_gateway_endpoint",
-        "label": "usms-s3-endpoint",
-        "category": "Networking & Content Delivery",
-        "health": "healthy",
-        "az": "Edge / Global",
-        "subnet": "global",
-        "replicas": 1,
-        "multiAz": false
-      }
-    },
-    {
-      "id": "lab-client",
-      "type": "serviceNode",
-      "position": {
-        "x": 10,
-        "y": 300
-      },
-      "data": {
-        "serviceId": "user",
-        "label": "Student browser",
-        "category": "Client / Ingress",
-        "health": "healthy",
-        "az": "Edge / Global",
-        "subnet": "global",
-        "replicas": 1,
-        "multiAz": false
-      }
-    },
-    {
-      "id": "lab-igw",
-      "type": "serviceNode",
-      "position": {
-        "x": 450,
-        "y": 60
-      },
-      "data": {
-        "serviceId": "internet_gateway",
-        "label": "usms-igw",
-        "category": "Networking & Content Delivery",
-        "health": "healthy",
-        "az": "Edge / Global",
-        "subnet": "global",
-        "replicas": 1,
-        "multiAz": false
-      }
-    },
-    {
-      "id": "lab-nat",
-      "type": "serviceNode",
-      "position": {
-        "x": 450,
-        "y": 300
-      },
-      "data": {
-        "serviceId": "nat_gateway",
-        "label": "usms-nat",
-        "category": "Networking & Content Delivery",
-        "health": "healthy",
+        "cidr": "10.0.0.0/18",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.0.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.0.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.0.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.0.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.63.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.0.4",
+          "end": "10.0.63.254"
+        },
         "az": "AZ-A",
-        "subnet": "public",
-        "replicas": 1,
-        "multiAz": false
-      }
-    },
-    {
-      "id": "lab-public-rt",
-      "type": "serviceNode",
-      "position": {
-        "x": 250,
-        "y": 940
-      },
-      "data": {
-        "serviceId": "route_tables",
-        "label": "usms-public-rt → IGW",
-        "category": "Networking & Content Delivery",
-        "health": "healthy",
-        "az": "Edge / Global",
-        "subnet": "global",
-        "replicas": 1,
-        "multiAz": false,
-        "notes": "Reference association: public subnets; default route to usms-igw. Live route-table selection is approximated."
-      }
-    },
-    {
-      "id": "lab-private-rt",
-      "type": "serviceNode",
-      "position": {
-        "x": 700,
-        "y": 940
-      },
-      "data": {
-        "serviceId": "route_tables",
-        "label": "usms-private-rt → NAT",
-        "category": "Networking & Content Delivery",
-        "health": "healthy",
-        "az": "Edge / Global",
-        "subnet": "global",
-        "replicas": 1,
-        "multiAz": false,
-        "notes": "Reference association: private subnets; default route to usms-nat; S3 endpoint route."
-      }
-    },
-    {
-      "id": "lab-app-sg",
-      "type": "boundaryNode",
-      "position": {
-        "x": 1270,
-        "y": 50
+        "routeTable": "usms-public-rt (0.0.0.0/0 -> usms-igw)",
+        "width": 660,
+        "height": 230,
+        "isSimulating": false,
+        "simulationStatus": "idle"
       },
       "style": {
-        "width": 220,
-        "height": 120
+        "width": 660,
+        "height": 230
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -3,
+      "measured": {
+        "width": 660,
+        "height": 230
+      },
+      "selected": false
+    },
+    {
+      "id": "box-public-subnet-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 840,
+        "y": 80
       },
       "data": {
-        "label": "usms-app-sg",
+        "label": "usms-public-subnet-b (us-east-1b)",
+        "boundaryType": "public_subnet",
+        "cidr": "10.0.64.0/18",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.64.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.64.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.64.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.64.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.127.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.64.4",
+          "end": "10.0.127.254"
+        },
+        "az": "AZ-B",
+        "routeTable": "usms-public-rt (0.0.0.0/0 -> usms-igw)",
+        "width": 660,
+        "height": 230,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 660,
+        "height": 230
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -3,
+      "measured": {
+        "width": 660,
+        "height": 230
+      },
+      "selected": false
+    },
+    {
+      "id": "box-private-subnet-a",
+      "type": "boundaryNode",
+      "position": {
+        "x": 120,
+        "y": 360
+      },
+      "data": {
+        "label": "usms-private-subnet-a (us-east-1a)",
+        "boundaryType": "private_subnet",
+        "cidr": "10.0.128.0/18",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.128.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.128.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.128.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.128.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.191.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.128.4",
+          "end": "10.0.191.254"
+        },
+        "az": "AZ-A",
+        "routeTable": "usms-private-rt (0.0.0.0/0 -> usms-nat, pl-s3 -> usms-s3-endpoint)",
+        "width": 660,
+        "height": 320,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 660,
+        "height": 320
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -3,
+      "measured": {
+        "width": 660,
+        "height": 320
+      },
+      "selected": false
+    },
+    {
+      "id": "box-private-subnet-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 840,
+        "y": 360
+      },
+      "data": {
+        "label": "usms-private-subnet-b (us-east-1b)",
+        "boundaryType": "private_subnet",
+        "cidr": "10.0.192.0/18",
+        "totalAddresses": 16384,
+        "usableHosts": 16379,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.192.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.192.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.192.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.192.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.255.255",
+            "offset": 16383,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.192.4",
+          "end": "10.0.255.254"
+        },
+        "az": "AZ-B",
+        "routeTable": "usms-private-rt (0.0.0.0/0 -> usms-nat, pl-s3 -> usms-s3-endpoint)",
+        "width": 660,
+        "height": 320,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 660,
+        "height": 320
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -3,
+      "measured": {
+        "width": 660,
+        "height": 320
+      },
+      "selected": false
+    },
+    {
+      "id": "sg-app",
+      "type": "boundaryNode",
+      "position": {
+        "x": 275,
+        "y": 110
+      },
+      "data": {
+        "label": "usms-app-sg (web tier)",
         "boundaryType": "security_group",
-        "width": 220,
-        "height": 120,
         "allowedProtocols": [
           "HTTP",
           "HTTPS"
-        ]
-      }
-    },
-    {
-      "id": "lab-db-sg",
-      "type": "boundaryNode",
-      "position": {
-        "x": 1270,
-        "y": 210
-      },
-      "style": {
-        "width": 220,
-        "height": 120
-      },
-      "data": {
-        "label": "usms-db-sg",
-        "boundaryType": "security_group",
-        "width": 220,
-        "height": 120,
-        "securityGroupRules": {
-          "inbound": [
-            {
-              "protocol": "SQL",
-              "portRange": "ALL",
-              "source": {
-                "type": "securityGroup",
-                "securityGroupId": "lab-app-sg"
-              }
-            }
-          ],
-          "outbound": []
-        }
-      }
-    },
-    {
-      "id": "lab-web",
-      "type": "serviceNode",
-      "position": {
-        "x": 250,
-        "y": 300
-      },
-      "data": {
-        "serviceId": "ec2",
-        "label": "usms-web-01",
-        "category": "Compute",
-        "health": "healthy",
-        "az": "AZ-A",
-        "subnet": "public",
-        "replicas": 1,
-        "multiAz": false,
-        "securityGroupIds": [
-          "lab-app-sg"
         ],
-        "notes": "Instance profile: usms-ec2-app-profile. Bootstrap, EIP and AMI lifecycle are covered in the original lab."
-      }
-    },
-    {
-      "id": "lab-task-sg",
-      "type": "boundaryNode",
-      "position": {
-        "x": 1270,
-        "y": 380
+        "width": 190,
+        "height": 158,
+        "isSimulating": false,
+        "simulationStatus": "idle"
       },
       "style": {
-        "width": 220,
-        "height": 120
+        "width": 190,
+        "height": 158
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -2,
+      "measured": {
+        "width": 190,
+        "height": 158
+      },
+      "selected": false
+    },
+    {
+      "id": "sg-enrolment",
+      "type": "boundaryNode",
+      "position": {
+        "x": 195,
+        "y": 410
       },
       "data": {
-        "label": "usms-enrolment-sg",
+        "label": "usms-enrolment-sg (sg-f57a1547660af7c69)",
         "boundaryType": "security_group",
-        "width": 220,
-        "height": 120,
         "securityGroupRules": {
           "inbound": [
             {
@@ -311,134 +363,1135 @@
               "portRange": "80",
               "source": {
                 "type": "securityGroup",
-                "securityGroupId": "lab-app-sg"
+                "securityGroupId": "sg-app"
               }
             }
           ],
           "outbound": []
-        }
-      }
+        },
+        "width": 190,
+        "height": 158,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 190,
+        "height": 158
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -2,
+      "measured": {
+        "width": 190,
+        "height": 158
+      },
+      "selected": false
     },
     {
-      "id": "lab-task-a",
+      "id": "sg-enrolment-b",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1075,
+        "y": 410
+      },
+      "data": {
+        "label": "usms-enrolment-sg (sg-f57a1547660af7c69)",
+        "boundaryType": "security_group",
+        "securityGroupRules": {
+          "inbound": [
+            {
+              "protocol": "HTTP",
+              "portRange": "80",
+              "source": {
+                "type": "securityGroup",
+                "securityGroupId": "sg-app"
+              }
+            }
+          ],
+          "outbound": []
+        },
+        "width": 190,
+        "height": 158,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 190,
+        "height": 158
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -2,
+      "measured": {
+        "width": 190,
+        "height": 158
+      },
+      "selected": false
+    },
+    {
+      "id": "sg-db",
+      "type": "boundaryNode",
+      "position": {
+        "x": 509.9979832151972,
+        "y": 400.4558288630563
+      },
+      "data": {
+        "label": "usms-db-sg (data tier)",
+        "boundaryType": "security_group",
+        "securityGroupRules": {
+          "inbound": [
+            {
+              "protocol": "SQL",
+              "portRange": "5432",
+              "source": {
+                "type": "securityGroup",
+                "securityGroupId": "sg-app"
+              }
+            }
+          ],
+          "outbound": []
+        },
+        "width": 190,
+        "height": 158,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 190,
+        "height": 158
+      },
+      "draggable": true,
+      "selectable": true,
+      "zIndex": -2,
+      "measured": {
+        "width": 190,
+        "height": 158
+      },
+      "selected": false
+    },
+    {
+      "id": "node-user",
       "type": "serviceNode",
       "position": {
-        "x": 250,
-        "y": 640
+        "x": -240,
+        "y": 160
+      },
+      "data": {
+        "serviceId": "user",
+        "label": "End User / Client (Student portal)",
+        "category": "Client / Ingress",
+        "health": "healthy",
+        "az": "Edge / Global",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 119,
+        "height": 81,
+        "isSimulating": true,
+        "simulationStatus": "active"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 119,
+        "height": 81
+      },
+      "style": {
+        "width": 119,
+        "height": 81
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-ecr",
+      "type": "serviceNode",
+      "position": {
+        "x": -240,
+        "y": -60
+      },
+      "data": {
+        "serviceId": "ecr",
+        "label": "Amazon ECR Public (public.ecr.aws)",
+        "category": "Containers",
+        "health": "healthy",
+        "az": "Edge / Global",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-igw",
+      "type": "serviceNode",
+      "position": {
+        "x": -12.261345707050154,
+        "y": 198.9848723905998
+      },
+      "data": {
+        "serviceId": "internet_gateway",
+        "label": "Internet Gateway (usms-igw)",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "Edge / Global",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "success"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-web-01",
+      "type": "serviceNode",
+      "position": {
+        "x": 300,
+        "y": 150
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "usms-web-01 (EC2, usms-app-sg)",
+        "category": "Compute",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "public",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "success",
+        "securityGroupIds": [
+          "sg-app"
+        ],
+        "customConfig": {
+          "securityGroups": [
+            "usms-app-sg"
+          ],
+          "instanceProfile": "usms-ec2-app-profile",
+          "elasticIp": "usms-web-eip",
+          "createdIn": "Lab 03"
+        }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-nat",
+      "type": "serviceNode",
+      "position": {
+        "x": 578,
+        "y": 204.90762415650707
+      },
+      "data": {
+        "serviceId": "nat_gateway",
+        "label": "NAT Gateway (usms-nat + EIP)",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "public",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "customConfig": {
+          "createdIn": "Lab 02",
+          "purpose": "Outbound image pull for private Fargate tasks"
+        }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-ecs-task-1",
+      "type": "serviceNode",
+      "position": {
+        "x": 220,
+        "y": 450
       },
       "data": {
         "serviceId": "ecs",
-        "label": "usms-enrolment-svc · task A",
+        "label": "Amazon ECS - usms-enrolment-svc (task 1, us-east-1a)",
         "category": "Compute",
         "health": "healthy",
         "az": "AZ-A",
         "subnet": "private",
         "replicas": 1,
         "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": true,
+        "simulationStatus": "active",
         "securityGroupIds": [
-          "lab-task-sg"
+          "sg-enrolment"
         ],
+        "notes": "One task of usms-enrolment-svc. The service keeps desiredCount = 2 (one task per AZ). Image pulled via NAT; logs via exec role; S3 via task role.",
         "customConfig": {
+          "ecsWorkspace": {
+            "clusterName": "usms-ecs-cluster",
+            "serviceName": "usms-enrolment-svc",
+            "family": "usms-enrolment",
+            "revision": 1,
+            "taskDefinition": "usms-enrolment:1",
+            "launchType": "FARGATE",
+            "networkMode": "awsvpc",
+            "cpu": "256",
+            "memory": "512",
+            "taskRole": "arn:aws:iam::000000000000:role/usms-ecs-task-role",
+            "executionRole": "arn:aws:iam::000000000000:role/usms-ecs-exec-role",
+            "containers": [
+              {
+                "name": "enrolment-api",
+                "image": "public.ecr.aws/nginx/nginx:stable-alpine",
+                "port": "80",
+                "essential": true
+              }
+            ],
+            "logConfiguration": {
+              "logDriver": "awslogs",
+              "awslogs-group": "/usms/ecs/enrolment",
+              "awslogs-stream-prefix": "enrolment"
+            },
+            "securityGroups": [
+              "usms-enrolment-sg"
+            ],
+            "assignPublicIp": "DISABLED",
+            "subnets": [
+              "usms-private-subnet-a",
+              "usms-private-subnet-b"
+            ],
+            "containerInsights": "enabled",
+            "serviceDesiredCount": 2,
+            "task": 1
+          },
           "ecs": {
             "launchType": "FARGATE",
             "networkMode": "awsvpc",
             "desiredCount": 1,
-            "runningCount": 1
+            "runningCount": 1,
+            "pendingCount": 0
           }
         }
-      }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
     },
     {
-      "id": "lab-task-b",
+      "id": "node-db-01",
       "type": "serviceNode",
       "position": {
-        "x": 750,
-        "y": 640
+        "x": 534.9979832151972,
+        "y": 440.4558288630563
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "usms-db-01 (EC2, usms-db-sg)",
+        "category": "Compute",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "private",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "securityGroupIds": [
+          "sg-db"
+        ],
+        "customConfig": {
+          "securityGroups": [
+            "usms-db-sg"
+          ],
+          "publicIp": "none",
+          "instanceProfile": "none",
+          "createdIn": "Lab 03"
+        }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-ecs-task-2",
+      "type": "serviceNode",
+      "position": {
+        "x": 1100,
+        "y": 450
       },
       "data": {
         "serviceId": "ecs",
-        "label": "usms-enrolment-svc · task B",
+        "label": "Amazon ECS - usms-enrolment-svc (task 2, us-east-1b)",
         "category": "Compute",
         "health": "healthy",
         "az": "AZ-B",
         "subnet": "private",
         "replicas": 1,
         "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
         "securityGroupIds": [
-          "lab-task-sg"
+          "sg-enrolment-b"
         ],
+        "notes": "One task of usms-enrolment-svc. The service keeps desiredCount = 2 (one task per AZ). Image pulled via NAT; logs via exec role; S3 via task role.",
         "customConfig": {
+          "ecsWorkspace": {
+            "clusterName": "usms-ecs-cluster",
+            "serviceName": "usms-enrolment-svc",
+            "family": "usms-enrolment",
+            "revision": 1,
+            "taskDefinition": "usms-enrolment:1",
+            "launchType": "FARGATE",
+            "networkMode": "awsvpc",
+            "cpu": "256",
+            "memory": "512",
+            "taskRole": "arn:aws:iam::000000000000:role/usms-ecs-task-role",
+            "executionRole": "arn:aws:iam::000000000000:role/usms-ecs-exec-role",
+            "containers": [
+              {
+                "name": "enrolment-api",
+                "image": "public.ecr.aws/nginx/nginx:stable-alpine",
+                "port": "80",
+                "essential": true
+              }
+            ],
+            "logConfiguration": {
+              "logDriver": "awslogs",
+              "awslogs-group": "/usms/ecs/enrolment",
+              "awslogs-stream-prefix": "enrolment"
+            },
+            "securityGroups": [
+              "usms-enrolment-sg"
+            ],
+            "assignPublicIp": "DISABLED",
+            "subnets": [
+              "usms-private-subnet-a",
+              "usms-private-subnet-b"
+            ],
+            "containerInsights": "enabled",
+            "serviceDesiredCount": 2,
+            "task": 2
+          },
           "ecs": {
             "launchType": "FARGATE",
             "networkMode": "awsvpc",
             "desiredCount": 1,
-            "runningCount": 1
+            "runningCount": 1,
+            "pendingCount": 0
           }
         }
-      }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
     },
     {
-      "id": "lab-logs",
+      "id": "node-public-rt",
       "type": "serviceNode",
       "position": {
-        "x": 1550,
-        "y": 640
+        "x": 233.952464298262,
+        "y": 768.8595946535228
+      },
+      "data": {
+        "serviceId": "route_tables",
+        "label": "usms-public-rt -> IGW",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "Edge / Global",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "notes": "Associated with usms-public-subnet-a and -b. 0.0.0.0/0 -> usms-igw."
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-private-rt",
+      "type": "serviceNode",
+      "position": {
+        "x": 559.2570428420856,
+        "y": 772.2548410833489
+      },
+      "data": {
+        "serviceId": "route_tables",
+        "label": "usms-private-rt -> NAT",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "Edge / Global",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "notes": "Associated with usms-private-subnet-a and -b. 0.0.0.0/0 -> usms-nat; S3 prefix list -> usms-s3-endpoint. No IGW route."
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-s3-endpoint",
+      "type": "serviceNode",
+      "position": {
+        "x": 1084.721391065782,
+        "y": 780.7429571579144
+      },
+      "data": {
+        "serviceId": "s3_gateway_endpoint",
+        "label": "S3 Gateway Endpoint (usms-s3-endpoint)",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "Edge / Global",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "customConfig": {
+          "type": "Gateway",
+          "service": "com.amazonaws.us-east-1.s3",
+          "routeTable": "usms-private-rt",
+          "createdIn": "Lab 02"
+        }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-cw-logs",
+      "type": "serviceNode",
+      "position": {
+        "x": 250,
+        "y": 968.4881160745656
       },
       "data": {
         "serviceId": "cloudwatch",
-        "label": "/usms/ecs/enrolment",
+        "label": "CloudWatch Logs (/usms/ecs/enrolment, 7-day retention)",
         "category": "Management & Governance",
         "health": "healthy",
         "az": "Edge / Global",
         "subnet": "global",
         "replicas": 1,
-        "multiAz": false
-      }
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "customConfig": {
+          "logGroup": "/usms/ecs/enrolment",
+          "retentionInDays": 7
+        }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
     },
     {
-      "id": "lab-role",
+      "id": "node-iam",
       "type": "serviceNode",
       "position": {
-        "x": 1550,
-        "y": 50
+        "x": 700,
+        "y": 975.2786089342178
       },
       "data": {
         "serviceId": "iam",
-        "label": "Task role / execution role",
+        "label": "IAM - usms-ecs-exec-role / usms-ecs-task-role",
         "category": "Security, Identity & Compliance",
         "health": "healthy",
         "az": "Edge / Global",
         "subnet": "global",
         "replicas": 1,
         "multiAz": false,
-        "notes": "usms-ecs-task-role: application APIs. usms-ecs-exec-role: agent startup/logging. Startup is not simulated."
-      }
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "notes": "usms-ecs-exec-role: used by ECS to pull the image and write logs. usms-ecs-task-role: used by the app for S3. Both trust ecs-tasks.amazonaws.com.",
+        "customConfig": {
+          "executionRole": {
+            "name": "usms-ecs-exec-role",
+            "trust": "ecs-tasks.amazonaws.com",
+            "policy": "USMSECSTaskExecution (ECR pull + logs to /usms/ecs/enrolment only)"
+          },
+          "taskRole": {
+            "name": "usms-ecs-task-role",
+            "trust": "ecs-tasks.amazonaws.com",
+            "policy": "USMSStudentDataReadWrite (reused from Lab 01)"
+          }
+        }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-s3",
+      "type": "serviceNode",
+      "position": {
+        "x": 1093.2095071403478,
+        "y": 971.8833625043917
+      },
+      "data": {
+        "serviceId": "s3",
+        "label": "Amazon S3 (image layers / usms-student-data)",
+        "category": "Storage",
+        "health": "healthy",
+        "az": "Edge / Global",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle",
+        "customConfig": {
+          "bucket": "usms-student-data",
+          "note": "Bucket is named in the task role policy but is not created until Lab 10"
+        }
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
     }
   ],
   "edges": [
     {
-      "id": "lab-web-lab-task-a",
-      "source": "lab-web",
-      "target": "lab-task-a",
+      "zIndex": 1000,
+      "source": "node-user",
+      "sourceHandle": "source-right",
+      "target": "node-igw",
+      "targetHandle": "target-left",
+      "id": "edge-node-user-node-igw-1",
       "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
       "data": {
-        "protocol": "HTTP",
+        "relationship": "request",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
         "interactionType": "synchronous",
         "isCriticalDependency": true,
-        "timeoutMs": 1500
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "completed",
+        "description": "Student portal request enters the VPC",
+        "flowStepNumber": 2,
+        "flowStepIndex": 1,
+        "flowAction": "Forward HTTPS request",
+        "flowLatency": 20,
+        "flowExplanation": "End User / Client (Student portal) forwarded HTTPS request to Internet Gateway (usms-igw)."
       }
     },
     {
-      "id": "lab-task-a-lab-logs",
-      "source": "lab-task-a",
-      "target": "lab-logs",
+      "zIndex": 1000,
+      "source": "node-igw",
+      "sourceHandle": "source-right",
+      "target": "node-web-01",
+      "targetHandle": "target-left",
+      "id": "edge-node-igw-node-web-01-2",
       "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
       "data": {
-        "protocol": "HTTPS",
+        "relationship": "request",
+        "protocol": "HTTP",
+        "transport": "HTTP",
+        "lineStyle": "straight",
         "interactionType": "synchronous",
         "isCriticalDependency": true,
-        "timeoutMs": 1500,
-        "traversal": "dependency"
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "completed",
+        "description": "usms-public-rt routes inbound traffic to the web tier (usms-app-sg allows HTTP/HTTPS)",
+        "flowStepNumber": 3,
+        "flowStepIndex": 2,
+        "flowAction": "Forward HTTP request",
+        "flowLatency": 20,
+        "flowExplanation": "Internet Gateway (usms-igw) forwarded HTTP request to usms-web-01 (EC2, usms-app-sg)."
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-web-01",
+      "sourceHandle": "source-right",
+      "target": "node-ecs-task-1",
+      "targetHandle": "target-left",
+      "id": "edge-node-web-01-node-ecs-task-1-3",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "request",
+        "protocol": "HTTP",
+        "transport": "HTTP",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "completed",
+        "description": "tcp/80 allowed by usms-enrolment-sg, source = usms-app-sg (AZ-A)",
+        "flowStepNumber": 4,
+        "flowStepIndex": 3,
+        "flowAction": "Route to Amazon ECS",
+        "flowLatency": 12,
+        "flowExplanation": "usms-web-01 (EC2, usms-app-sg) forwarded HTTP request to Amazon ECS - usms-enrolment-svc (task 1, us-east-1a)."
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-web-01",
+      "sourceHandle": "source-right",
+      "target": "node-ecs-task-2",
+      "targetHandle": "target-left",
+      "id": "edge-node-web-01-node-ecs-task-2-4",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "request",
+        "protocol": "HTTP",
+        "transport": "HTTP",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "tcp/80 allowed by usms-enrolment-sg, source = usms-app-sg (AZ-B)"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-1",
+      "sourceHandle": "source-right",
+      "target": "node-nat",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-1-node-nat-5",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Image pull: usms-private-rt 0.0.0.0/0 -> usms-nat"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-2",
+      "sourceHandle": "source-right",
+      "target": "node-nat",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-2-node-nat-6",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Image pull: usms-private-rt 0.0.0.0/0 -> usms-nat"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-nat",
+      "sourceHandle": "source-right",
+      "target": "node-igw",
+      "targetHandle": "target-left",
+      "id": "edge-node-nat-node-igw-7",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "NAT egress through usms-igw"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-igw",
+      "sourceHandle": "source-right",
+      "target": "node-ecr",
+      "targetHandle": "target-left",
+      "id": "edge-node-igw-node-ecr-8",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Pull public.ecr.aws/nginx/nginx:stable-alpine"
+      },
+      "selected": false
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-1",
+      "sourceHandle": "source-right",
+      "target": "node-s3-endpoint",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-1-node-s3-endpoint-9",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Image layers / student data via S3 prefix-list route"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-2",
+      "sourceHandle": "source-right",
+      "target": "node-s3-endpoint",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-2-node-s3-endpoint-10",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Image layers / student data via S3 prefix-list route"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-s3-endpoint",
+      "sourceHandle": "source-right",
+      "target": "node-s3",
+      "targetHandle": "target-left",
+      "id": "edge-node-s3-endpoint-node-s3-11",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Private path to S3 (no internet)"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-1",
+      "sourceHandle": "source-right",
+      "target": "node-cw-logs",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-1-node-cw-logs-12",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "async",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "awslogs driver, stream prefix 'enrolment' (exec role)"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-2",
+      "sourceHandle": "source-right",
+      "target": "node-cw-logs",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-2-node-cw-logs-13",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "async",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "awslogs driver, stream prefix 'enrolment' (exec role)"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-1",
+      "sourceHandle": "source-right",
+      "target": "node-iam",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-1-node-iam-14",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Uses usms-ecs-exec-role (pull/logs) and usms-ecs-task-role (app)"
+      }
+    },
+    {
+      "zIndex": 1000,
+      "source": "node-ecs-task-2",
+      "sourceHandle": "source-right",
+      "target": "node-iam",
+      "targetHandle": "target-left",
+      "id": "edge-node-ecs-task-2-node-iam-15",
+      "type": "custom",
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#94A3B8"
+      },
+      "data": {
+        "relationship": "dependency",
+        "protocol": "HTTPS",
+        "transport": "HTTPS",
+        "lineStyle": "straight",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 2500,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "dimmed",
+        "description": "Uses usms-ecs-exec-role (pull/logs) and usms-ecs-task-role (app)"
       }
     },
     {
@@ -480,11 +1533,11 @@
     }
   ],
   "scenario": {
-    "id": "lab4-private-tasks",
-    "name": "lab4-private-tasks",
+    "id": "lab4-enrolment-request",
+    "name": "Student enrolment request",
     "method": "GET",
     "path": "/",
-    "startNodeId": "lab-web",
+    "startNodeId": "node-user",
     "trafficLevel": "normal"
   }
 }

@@ -13,7 +13,7 @@
     "path": "/",
     "trafficLevel": "normal"
   },
- "nodes": [
+  "nodes": [
     {
       "id": "eks-workload",
       "type": "serviceNode",
@@ -473,6 +473,49 @@
       "measured": {
         "width": 640,
         "height": 330
+      }
+    },
+    {
+      "id": "eks-workload",
+      "type": "serviceNode",
+      "position": {
+        "x": 540,
+        "y": 1000
+      },
+      "data": {
+        "serviceId": "eks",
+        "label": "Application Service · 3 Ready pods",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "private",
+        "az": "AZ-A",
+        "replicas": 1,
+        "multiAz": false,
+        "notes": "Select More information: Deployment, Service, pods, containers. Start requests here.",
+        "customConfig": {
+          "eks": {
+            "kind": "workload",
+            "clusterName": "eks-architecture",
+            "namespace": "default",
+            "workloadName": "application",
+            "compute": "EC2",
+            "desiredReplicas": 3,
+            "runningPods": 3,
+            "readyPods": 3,
+            "serviceSelector": "application",
+            "podLabel": "application",
+            "serviceType": "ClusterIP",
+            "servicePort": 80,
+            "containerPort": 8080,
+            "image": "example/application:1.0",
+            "controlPlaneAvailable": true,
+            "nodeCount": 2,
+            "hpaEnabled": false,
+            "nodeAutoscaler": "NONE"
+          },
+          "coverage": "Aggregate workload snapshot; illustrated pod-to-node placement is not runtime scheduling. Image is a placeholder, not fetched."
+        },
+        "visualContainerId": "eks-subnet-a"
       }
     },
     {
