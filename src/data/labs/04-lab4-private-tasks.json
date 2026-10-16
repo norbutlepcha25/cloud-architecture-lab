@@ -1,5 +1,6 @@
 {
   "id": "lab4-private-tasks",
+  "title": "Private tasks",
   "category": "My references",
   "difficulty": "Beginner",
   "description": "User-created architecture snapshot.",
@@ -7,7 +8,7 @@
   "name": "LAB-04-ECS-USMS-ENROLMENT",
   "nodes": [
     {
-      "id": "box-vpc",
+      "id": "lab-vpc",
       "type": "boundaryNode",
       "position": {
         "x": -2,
@@ -510,7 +511,7 @@
         "y": -60
       },
       "data": {
-        "serviceId": "ecr",
+        "serviceId": "ecr_registry",
         "label": "Amazon ECR Public (public.ecr.aws)",
         "category": "Containers",
         "health": "healthy",
@@ -539,8 +540,8 @@
       "id": "node-igw",
       "type": "serviceNode",
       "position": {
-        "x": -12.261345707050154,
-        "y": 198.9848723905998
+        "x": 30,
+        "y": 710
       },
       "data": {
         "serviceId": "internet_gateway",
@@ -617,7 +618,7 @@
       "type": "serviceNode",
       "position": {
         "x": 578,
-        "y": 204.90762415650707
+        "y": 150
       },
       "data": {
         "serviceId": "nat_gateway",
@@ -864,7 +865,7 @@
       "type": "serviceNode",
       "position": {
         "x": 233.952464298262,
-        "y": 768.8595946535228
+        "y": 710
       },
       "data": {
         "serviceId": "route_tables",
@@ -898,7 +899,7 @@
       "type": "serviceNode",
       "position": {
         "x": 559.2570428420856,
-        "y": 772.2548410833489
+        "y": 710
       },
       "data": {
         "serviceId": "route_tables",
@@ -932,7 +933,7 @@
       "type": "serviceNode",
       "position": {
         "x": 1084.721391065782,
-        "y": 780.7429571579144
+        "y": 710
       },
       "data": {
         "serviceId": "s3_gateway_endpoint",
@@ -1496,7 +1497,7 @@
     }
   ],
   "scenario": {
-    "id": "lab4-enrolment-request",
+    "id": "lab4-private-tasks",
     "name": "Student enrolment request",
     "method": "GET",
     "path": "/",
