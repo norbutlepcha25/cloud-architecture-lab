@@ -440,6 +440,43 @@
         "timeoutMs": 1500,
         "traversal": "dependency"
       }
+    },
+    {
+      "id": "lab-client-lab-web",
+      "source": "lab-client",
+      "target": "lab-web",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTP",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1500
+      }
+    },
+    {
+      "id": "lab-web-lab-task-b",
+      "source": "lab-web",
+      "target": "lab-task-b",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTP",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1500
+      }
+    },
+    {
+      "id": "lab-task-b-lab-logs",
+      "source": "lab-task-b",
+      "target": "lab-logs",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1500,
+        "traversal": "dependency"
+      }
     }
   ],
   "scenario": {

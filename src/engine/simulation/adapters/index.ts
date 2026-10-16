@@ -2,7 +2,7 @@ import { managedServicesAdapter } from './managedServices.ts';
 import type { Adapter } from './types.ts';
 import { perimeterInspectionAdapter } from './perimeterInspection.ts';
 import { computeCapacityAdapter } from './computeCapacity.ts';
-import { ecsDependencyCallsAdapter } from './ecsDependencyCalls.ts';
+import { dependencyCallsAdapter } from './dependencyCalls.ts';
 import { natGatewayAdapter } from './natGatewayHop.ts';
 import { terminalNodeAdapter } from './terminalNode.ts';
 import { cloudFrontAdapter } from './cloudFront.ts';
@@ -22,7 +22,7 @@ import { networkPathAdapter } from './networkPath.ts';
 export const SIMULATION_PIPELINE: Adapter[] = [
   perimeterInspectionAdapter,
   computeCapacityAdapter,
-  ecsDependencyCallsAdapter,
+  dependencyCallsAdapter,
   natGatewayAdapter,
   managedServicesAdapter,
   terminalNodeAdapter,

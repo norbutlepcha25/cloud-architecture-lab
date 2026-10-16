@@ -113,6 +113,8 @@ export type FlowStatus = 'active' | 'completed' | 'pending' | 'failed' | 'dimmed
 
 export interface ConnectionData extends Record<string, unknown> {
   transport?: 'HTTP' | 'HTTPS' | 'TCP' | 'UDP';
+  /** Explicit destination port; absent values retain the educational protocol abstraction. */
+  destinationPort?: number;
   /** Structural relationships never act as forwarding hops. Legacy edges default to request. */
   relationship?: import('../engine/architecture/relationships.ts').RelationshipKind;
   protocol: ProtocolType;
@@ -187,6 +189,11 @@ export interface SimulationStep {
     failureReason?: string;
     recoveryApplied?: string;
     dependencyCall?: boolean;
+    callId?: string;
+    parentCallId?: string;
+    phase?: 'call' | 'response';
+    /** A logical application response is not proof of reverse packet evaluation. */
+    returnPathEvaluated?: boolean;
     returnsToNodeId?: string;
   };
 }
@@ -201,7 +208,13 @@ export interface SimulationScenario {
   simulateFailureCascade?: boolean;
 }
 
+export type SimulationResultKind = 'request' | 'configuration-check' | 'authorization-check';
+export type SimulationOutcome = 'success' | 'failure' | 'denied' | 'unsupported';
+
 export interface SimulationResult {
+  /** Absent on older saved results; those retain request presentation. */
+  kind?: SimulationResultKind;
+  outcome?: SimulationOutcome;
   serviceStates?: Record<string, import('../engine/services/operations.ts').Runtime>;
   scenario: SimulationScenario;
   steps: SimulationStep[];

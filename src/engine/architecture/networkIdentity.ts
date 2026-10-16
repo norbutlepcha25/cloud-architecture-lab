@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react';
 import { findContainingSubnetBoundary, findContainingVpc } from '../layout/containment.ts';
 import type { Finding } from '../findings.ts';
+import { parseCidr } from '../network/cidr.ts';
 
 /** Validate explicit references without silently replacing them with geometric guesses. */
 export function validateNetworkIdentities(nodes: Node<any>[]): Finding[] {
@@ -15,6 +16,9 @@ export function validateNetworkIdentities(nodes: Node<any>[]): Finding[] {
       awsRule: 'Subnets belong to a VPC; resource subnet membership is explicit.',
       recommendation: 'Select an existing compatible resource or clear the explicit assignment.'
     });
+    if (identity.privateIp !== undefined && (typeof identity.privateIp !== 'string' || identity.privateIp.includes('/') || !parseCidr(`${identity.privateIp}/32`))) {
+      report('privateIp', 'Private IP must be a single valid IPv4 address. IPv6 is not modeled.');
+    }
     for (const [field, matches] of [
       ['subnetId', (n: Node<any>) => n.type === 'boundaryNode' && ['public_subnet', 'private_subnet'].includes(n.data.boundaryType)],
       ['vpcId', (n: Node<any>) => n.type === 'boundaryNode' && n.data.boundaryType === 'vpc'],

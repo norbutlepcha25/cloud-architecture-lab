@@ -87,8 +87,11 @@ export function checkNetworkFirewalls(
   protocol: string,
   targetNode: Node<any>,
   boundaryNodes: Node<any>[],
-  sourceNode?: Node<any>
+  sourceNode?: Node<any>,
+  packet?: { destinationPort?: number }
 ): FirewallCheckResult {
+  const ip = sourceNode?.data.networkIdentity?.privateIp;
+  const sourceCidr = typeof ip === 'string' ? `${ip}/32` : undefined;
   const subnet = findContainingSubnetBoundary(targetNode, boundaryNodes);
   const denyInbound: string[] | undefined = subnet && (subnet.data as any)?.naclDenyInbound;
   const customNacl: SubnetNaclConfig | undefined = subnet && (subnet.data as any)?.customNacl;
@@ -100,7 +103,7 @@ export function checkNetworkFirewalls(
     // Delegates to the shared, independently-tested NACL evaluator (first-match, ascending rule
     // order, implicit final DENY) - see src/engine/network/nacl.ts. Behavior is unchanged from
     // the inline version this replaced.
-    const evaluation = evaluateNaclRules(customNacl.inboundRules, protocol);
+    const evaluation = evaluateNaclRules(customNacl.inboundRules, protocol, { port: packet?.destinationPort, sourceCidr });
     const isImplicitDeny = evaluation.decidingRule.ruleNumber === 32767;
     nacl = {
       evaluated: true,
@@ -151,11 +154,8 @@ export function checkNetworkFirewalls(
   if (configuredGroups.length > 0) {
     const labels = configuredGroups.map(sg => (sg.data as any)?.label || 'Security Group');
     const boundaryLabel = labels.join(', ');
-    // Security-group-reference matching uses the SOURCE's real attached Security Group ids - this
-    // is genuine canvas data (unlike source IP/CIDR, which this simulator does not model per
-    // node - see NETWORK_ENGINE_DEVIATIONS.md). CIDR-based rules are evaluated protocol/port-only
-    // (sourceCidr left undefined), matching this engine's existing behavior of never blocking on
-    // an unmodeled source address.
+    // Explicit source IPv4 and destination port participate when supplied. Missing values
+    // retain the existing educational abstraction; they are disclosed in live trace evidence.
     const peerSecurityGroupIds: string[] = sourceNode ? ((sourceNode.data as any)?.securityGroupIds || []) : [];
 
     const decisions = configuredGroups.map(sg => {
@@ -164,6 +164,8 @@ export function checkNetworkFirewalls(
       return evaluateSecurityGroup(rules, {
         direction: 'inbound',
         protocol,
+        port: packet?.destinationPort,
+        sourceCidr,
         peerSecurityGroupIds,
         connectionState: 'new'
       });

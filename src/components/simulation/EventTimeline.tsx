@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, useState, useId } from 'react';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
 import {
-  Clock,
   CheckCircle2,
   XCircle,
-  ChevronRight
+  ChevronRight,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 export const EventTimeline: React.FC = () => {
@@ -39,15 +40,10 @@ export const EventTimeline: React.FC = () => {
   return (
     <div className="bg-white border-t border-slate-200 flex flex-col shrink-0 max-h-52 select-none z-10 shadow-xs">
       {/* Top Banner / Active Event Detail */}
-      <div className="px-6 py-2 border-b border-slate-100 bg-white flex items-center justify-between">
+      <div className="px-4 py-1.5 border-b border-slate-100 bg-white flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5 text-slate-500" />
-          <span className="text-xs font-semibold text-slate-800">
-            Request Flow Timeline
-          </span>
-          <span className="text-[10px] text-slate-400 font-mono">
-            {isCollapsed ? `${simulationResult.steps.length} steps` : '(Click step to scrub)'}
-          </span>
+          <span className="text-xs font-semibold text-slate-800">Timeline</span>
+          <span className="text-[10px] text-slate-400 font-mono">{simulationResult.steps.length} steps</span>
         </div>
 
         {!isCollapsed && activeStep && (
@@ -61,13 +57,15 @@ export const EventTimeline: React.FC = () => {
           type="button"
           aria-expanded={!isCollapsed}
           aria-controls={timelineId}
-          className="ml-3 shrink-0 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-circuit-600"
+          aria-label={isCollapsed ? 'Expand timeline' : 'Minimize timeline'}
+          title={isCollapsed ? 'Expand timeline' : 'Minimize timeline'}
+          className="ml-3 shrink-0 rounded p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-circuit-600"
           onClick={() => {
             setHoveredStepIndex(null);
             setIsCollapsed(value => !value);
           }}
         >
-          {isCollapsed ? 'Expand timeline' : 'Minimize timeline'}
+          {isCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
       </div>
 
@@ -90,19 +88,17 @@ export const EventTimeline: React.FC = () => {
               }}
               onMouseEnter={() => setHoveredStepIndex(idx)}
               onMouseLeave={() => setHoveredStepIndex(null)}
-              className={`min-w-[250px] max-w-[280px] flex-shrink-0 p-2.5 rounded-xl border transition-all cursor-pointer ${
+              className={`min-w-[250px] max-w-[280px] flex-shrink-0 p-2.5 rounded-lg border transition-colors cursor-pointer ${
                 isActive
-                  ? 'bg-white border-circuit-600 ring-2 ring-circuit-500/20 shadow-sm'
-                  : 'bg-white border-slate-200 hover:border-circuit-300 hover:shadow-xs'
+                  ? 'bg-white border-circuit-600 ring-1 ring-circuit-600'
+                  : 'bg-white border-slate-200 hover:border-slate-300'
               }`}
             >
               {/* Event Top Bar */}
               <div className="flex items-center justify-between gap-1 mb-1">
                 <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500">
-                  <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-[10px]">
-                    {idx + 1}
-                  </span>
-                  <span className="font-bold">+{step.timestampMs}ms</span>
+                  <span className="font-bold text-slate-900">{idx + 1}</span>
+                  <span>+{step.timestampMs}ms</span>
                   <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold">
                     {step.protocol}
                   </span>
@@ -110,7 +106,7 @@ export const EventTimeline: React.FC = () => {
 
                 {isFailed ? (
                   <span className="flex items-center gap-1 text-[10px] text-rose-600 font-bold">
-                    <XCircle className="w-3.5 h-3.5" /> FAILED
+                    <XCircle className="w-3.5 h-3.5" /> Failed
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-bold">

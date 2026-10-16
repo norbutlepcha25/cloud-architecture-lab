@@ -16,7 +16,7 @@ export function runLabReference(reference: LabReference): SimulationResult {
   const { principal, action, resourceArn } = ref.authorization;
   const result = evaluateAuthorization({ principal, action, resource: { arn: resourceArn, accountId: principal.accountId } });
   const success = result.effect === 'Allow';
-  return { scenario: ref.scenario, success, statusCode: success ? 200 : 403, totalLatencyMs: 0,
+  return { kind: 'authorization-check', outcome: success ? 'success' : 'denied', scenario: ref.scenario, success, statusCode: success ? 200 : 403, totalLatencyMs: 0,
     summary: `${result.finalReason} Scope: IAM policy evaluation only; no S3 network request or deployment was executed.`,
     path: ['lab-user', 'lab-bucket'], bottlenecksDetected: [], cascadeOccurred: false,
     steps: result.steps.map((step, i) => ({ id: `iam-${i}`, stepNumber: i + 1, timestampMs: 0,

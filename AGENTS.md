@@ -1,5 +1,17 @@
 # AGENTS.md --- AWS Architecture Lab
 
+## Required shared service behavior workflow
+
+Before service, simulation, connection, reference, lab, or challenge changes, read
+[docs/SERVICE_BEHAVIOR_GOVERNANCE.md](docs/SERVICE_BEHAVIOR_GOVERNANCE.md).
+It defines the shared behavior invariants, ordered improvement plan, required
+verification, and service-by-name implementation workflow. In an established
+service-improvement conversation, a service name requests that workflow: inspect
+existing behavior, create missing necessary specification/implementation/test files,
+integrate with shared engines, and verify overall composition. A filename or model
+registration alone does not establish behavioral support. Record unsupported scope.
+
+
 ## 1. Project identity
 
 **Project name:** AWS Architecture Lab\

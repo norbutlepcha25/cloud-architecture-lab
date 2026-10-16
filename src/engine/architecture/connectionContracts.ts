@@ -18,6 +18,8 @@ const inputs: Record<string, ProtocolType[]> = {
   waf: ['HTTPS', 'HTTP'], eventbridge: ['HTTPS', 'Event'], step_functions: ['HTTPS', 'Event']
 };
 const operations: Record<string, string[]> = { s3: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'], sqs: ['sqs:SendMessage'], sns: ['sns:Publish'], dynamodb: ['dynamodb:GetItem', 'dynamodb:PutItem'], lambda: ['lambda:InvokeFunction'] };
+/** Explicit bounded interaction coverage, independent of catalog metadata. */
+export function hasConnectionContract(serviceId: string): boolean { return Object.prototype.hasOwnProperty.call(inputs, serviceId); }
 /** Canvas defaults must distinguish control-plane links from application traffic. */
 /** Policy-association illustration, not a credential exchange or forwarding hop.
  * AWS: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html
@@ -47,6 +49,7 @@ export function checkConnection(source: Node<any> | undefined, target: Node<any>
   const bad = (reason: string) => ({ status: 'invalid' as const, reason });
   if (!source || !target) return bad('Connection references a missing resource.');
   if (source.id === target.id) return bad('A resource cannot connect to itself.');
+  if (data?.destinationPort !== undefined && (!Number.isInteger(data.destinationPort) || data.destinationPort < 1 || data.destinationPort > 65535)) return bad('Destination port must be an integer from 1 to 65535.');
   const kind = relationshipKind(data);
   if (kind === 'authorization') return isAuthorizationPair(source, target) ? { status: 'valid', reason: 'Authorization illustration, not a network hop. This line does not grant access; configured policies determine permission. Send the actual request directly to S3.' } : bad('Unsupported authorization illustration for this pair.');
   if (data?.referenceAnnotation && kind === 'manages') return { status: 'unknown', reason: 'Lab configuration link only. This relationship is editable but does not execute application traffic or prove AWS behavior.' };

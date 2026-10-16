@@ -1,3 +1,6 @@
+import { resolveRequestStart } from '../engine/simulation/requestStart.ts';
+import { changeAnalyticsContext, track } from '../analytics/analytics.ts';
+import { COURSE_LABS } from '../data/courseLabs.ts';
 import { isEksManagementPair } from '../engine/architecture/eksRelationships.ts';
 import { labAnnotationProtocol } from '../engine/architecture/labConnections.ts';
 import { observeAlbRequests } from '../engine/scaling/albObservation.ts';
@@ -818,7 +821,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     const edge = edges.find(e => e.id === id);
     if (!edge) return;
     const data = { ...edge.data, ...partialData, ...(partialData.protocol ? { transport: interactionTransport(partialData.protocol) } : {}) } as ConnectionData;
-    if (['protocol', 'action', 'transport', 'relationship'].some(key => key in partialData)) {
+    if (['protocol', 'action', 'transport', 'relationship', 'destinationPort'].some(key => key in partialData)) {
       const result = checkConnection(nodes.find(n => n.id === edge.source), nodes.find(n => n.id === edge.target), data);
       if (result.status === 'invalid' || (edge.data?.referenceAnnotation && data.relationship !== 'manages' && result.status !== 'valid')) { window.alert(result.reason); return; }
     }
@@ -896,6 +899,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Clear / Reset canvas to baseline starter VPC and Public/Private subnets
   const clearCanvas = useCallback(() => {
+    changeAnalyticsContext({ lab_id: undefined, reference_id: undefined, challenge_id: undefined });
     setActiveLabReference(null);
     setDraftViewport(null);
     setCanvasRevision(value => value + 1);
@@ -1006,6 +1010,11 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const openLabReference = useCallback((reference: LabReference, run = false) => {
     const snapshot = structuredClone(reference);
+    const known = COURSE_LABS.some(lab => lab.references.some(ref => ref.id === snapshot.id));
+    changeAnalyticsContext({ page: 'lab', lab_id: known ? snapshot.id : 'custom', reference_id: undefined });
+    track('lab_opened');
+    const initialResult = run ? runLabReference(snapshot) : null;
+    if (initialResult) track(snapshot.configurationChecks ? 'configuration_checked' : 'simulation_run', { success: initialResult.success });
     setActiveLabReference(snapshot);
     setDraftName(snapshot.title.slice(0, 120));
     setDraftViewport(null);
@@ -1017,7 +1026,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     setSelectedEdgeId(null);
     setShowNaclSideColumn(false);
     setScenario(snapshot.scenario);
-    setSimulationResult(run ? runLabReference(snapshot) : null);
+    setSimulationResult(initialResult);
     setActiveStepIndex(run ? 0 : null);
     setHoveredStepIndex(null);
     setHighlightTaskFlow(run);
@@ -1029,6 +1038,8 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
   const loadTemplate = useCallback((templateId: string, reference?: ReferenceArchitecture) => {
     const template = structuredClone(reference ?? REFERENCE_ARCHITECTURES.find(t => t.id === templateId));
     if (!template) return;
+    changeAnalyticsContext({ page: 'lab', lab_id: undefined, reference_id: REFERENCE_ARCHITECTURES.some(ref => ref.id === template.id) ? template.id : 'custom' });
+    track('reference_opened');
     setDraftName(template.name.slice(0, 120));
     setIsPlaying(false);
     setHoveredStepIndex(null);
@@ -1045,10 +1056,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     setSelectedEdgeId(null);
 
     // Auto-align scenario startNodeId with an ingress service in the loaded template
-    const serviceNodes = template.nodes.filter(n => n.type === 'serviceNode' || (n.data && (n.data as any).serviceId));
-    const ingressNode = serviceNodes.find(n => ['user', 'client_ui', 'api_client'].includes((n.data as any).serviceId))
-      || serviceNodes.find(n => ['internet_gateway', 'cloudfront', 'route53', 'alb', 'api_gateway'].includes((n.data as any).serviceId))
-      || serviceNodes[0];
+    const ingressNode = resolveRequestStart(template.nodes);
 
     if (template.scenario) setScenario(template.scenario);
     else if (ingressNode) {
@@ -1079,6 +1087,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const runScenario = useCallback(() => {
     const result = evaluateCurrentScenario();
+    track(activeLabReference?.configurationChecks ? 'configuration_checked' : 'simulation_run', { page: 'lab', success: result.success });
     const scaled = observeAlbRequests(effectiveNodes, effectiveEdges, result);
     if (scaled.notes.length) {
       result.summary += ` Scaling: ${scaled.notes.join(' ')}`;
@@ -1097,7 +1106,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     setHighlightTaskFlow(true);
     setIsPlaying(true);
     setAppMode('simulate');
-  }, [evaluateCurrentScenario, effectiveNodes, effectiveEdges, nodes, edges]);
+  }, [evaluateCurrentScenario, effectiveNodes, effectiveEdges, nodes, edges, activeLabReference]);
 
   // Toggle Task Flow lines on/off with smart auto-simulation
   const toggleTaskFlow = useCallback(() => {
@@ -1105,6 +1114,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
       const next = !prev;
       if (next && !simulationResult && nodes.length > 0) {
         const result = evaluateCurrentScenario();
+    track(activeLabReference?.configurationChecks ? 'configuration_checked' : 'simulation_run', { page: 'lab', success: result.success });
         setSimulationResult(result);
     if (result.serviceStates && Object.keys(result.serviceStates).length) setNodes(previous => previous.map(node => result.serviceStates?.[node.id]
       ? { ...node, data: { ...node.data, customConfig: { ...node.data.customConfig, serviceRuntime: result.serviceStates[node.id] } } } : node));
@@ -1392,6 +1402,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
       validationFindings,
       architecturalFindings
     });
+    track('challenge_evaluated', { page: 'lab', passed: res.passed });
     setChallengeResult(res);
   }, [activeChallenge, nodes, edges, analysis, simulationResult, validationFindings, architecturalFindings]);
 
@@ -1403,6 +1414,8 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     const draft = parseDraft(text);
     const challenge = draft.activeChallengeId ? STUDENT_CHALLENGES.find(c => c.id === draft.activeChallengeId) : null;
     if (draft.activeChallengeId && !challenge) throw new Error('This draft references a challenge unavailable in this version.');
+    const knownLab = COURSE_LABS.some(lab => lab.references.some(ref => ref.id === draft.activeLabReference?.id));
+    changeAnalyticsContext({ lab_id: draft.activeLabReference ? knownLab ? draft.activeLabReference.id : 'custom' : undefined, reference_id: undefined });
     setDraftName(draft.draftName ?? 'Untitled draft');
     setIsPlaying(false); setHoveredStepIndex(null);
     setNodes(draft.nodes); setEdges(draft.edges); setScenario(draft.scenario);

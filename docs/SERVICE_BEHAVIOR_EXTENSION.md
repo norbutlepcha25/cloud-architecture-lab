@@ -1,5 +1,7 @@
 # Incremental service behavior development
 
+Required companion: [shared behavior governance and service-by-name workflow](SERVICE_BEHAVIOR_GOVERNANCE.md). Use its [service specification template](behavior/SERVICE_TEMPLATE.md) for missing behavior documents.
+
 Implement one bounded service behavior at a time. “Full AWS” is not a useful acceptance criterion: enumerate observable behaviors, official references, positive/negative tests, and explicit exclusions first.
 
 ## Repeatable workflow
@@ -42,3 +44,7 @@ Not included: ECS bridge/host/none networking, placement capacity, task startup,
 ## Regression fixture correction
 
 `SVC-SQS-SUCCESS-001` previously placed its ECS producer in the helper's default global location. Its producer is now in a private subnet, consistent with the modeled awsvpc requirement. Success/status assertions remain unchanged. The test's existing 202 acknowledgment describes the simulator abstraction; it must not be treated as proof of the actual SQS API HTTP response code.
+
+## Shared consistency increment (2026-10-16)
+
+See [implementation evidence](target-architecture/SERVICE_CONSISTENCY_PROGRESS.md) and [DynamoDB child-call scope](behavior/dynamodb.md). Live forwarding and supported dependency calls share simulation/applicationHop.ts. Required and optional child failures have independent evidence sinks; optional denial no longer fails the parent. Result kinds and explicit packet context are recorded. The standalone unified/interaction engines remain diagnostics, and the broader workflow/network migration remains incomplete.

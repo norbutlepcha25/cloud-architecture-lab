@@ -43,7 +43,7 @@ export function checkLabConfiguration(ref: LabReference): SimulationResult {
   });
   const failed = steps.filter(step => step.status === 'failed');
   const success = checks.length > 0 && failed.length === 0;
-  return { scenario: ref.scenario, steps, success, statusCode: success ? 200 : 400,
+  return { kind: 'configuration-check', outcome: success ? 'success' : 'failure', scenario: ref.scenario, steps, success, statusCode: success ? 200 : 400,
     totalLatencyMs: 0, path: [], bottlenecksDetected: [], cascadeOccurred: false,
     summary: `Configuration ${success ? 'PASS' : 'FAIL'}: ${steps.length - failed.length}/${steps.length} stated course checks passed. No request, function, build, deployment, metric evaluation or notification was executed.${failed.length ? ` ${failed[0].explanation}` : ''} ${ref.simulationScope ?? ''}` };
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
 import { RequestTraceModal } from './RequestTraceModal.tsx';
+import { resultEvidence, resultLabel } from '../../engine/simulation/resultEvidence.ts';
 import {
   Play,
   Pause,
@@ -43,7 +44,7 @@ export const SimulationControls: React.FC = () => {
   const currentStepNum = activeStepIndex !== null ? activeStepIndex + 1 : 0;
 
   return (
-    <div className="bg-white border-t border-slate-200 px-6 py-2.5 shadow-sm flex flex-wrap items-center justify-between gap-4 z-10 select-none">
+    <div className="bg-white border-t border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-4 z-10 select-none">
       {/* Left: Request Parameters */}
       <div className="flex items-center gap-3">
         {!checkOnly && <div className="flex items-center gap-1.5 font-mono text-xs">
@@ -71,24 +72,24 @@ export const SimulationControls: React.FC = () => {
 
         {/* Traffic Load Selector */}
         {!checkOnly && <div className="flex items-center gap-1.5 text-xs text-slate-600">
-          <span className="font-normal text-slate-500">Load:</span>
+          <span className="text-slate-500">Load</span>
           <select
             value={scenario.trafficLevel}
             onChange={(e) => setScenario(prev => ({ ...prev, trafficLevel: e.target.value as any }))}
             className="px-2 py-1 rounded-md bg-white border border-slate-200 text-slate-800 focus:outline-none focus:border-slate-400 font-mono text-xs"
           >
-            <option value="low">Low (1 req/s)</option>
-            <option value="normal">Normal (10 req/s)</option>
-            <option value="high">High (100 req/s)</option>
-            <option value="10x">10x Surge Spike</option>
-            <option value="100x">100x Extreme Spike</option>
+            <option value="low">1 req/s</option>
+            <option value="normal">10 req/s</option>
+            <option value="high">100 req/s</option>
+            <option value="10x">10× spike</option>
+            <option value="100x">100× spike</option>
           </select>
         </div>}
 
         {/* Run Request Button */}
         <button
           onClick={runScenario}
-          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#232F3E] hover:bg-[#1A232E] text-white font-medium text-xs shadow-xs active:scale-98 transition-all"
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#232F3E] hover:bg-[#1A232E] text-white font-medium text-xs transition-colors"
         >
           <Send className="w-3.5 h-3.5" />
           <span>{configurationOnly ? 'Check Configuration' : policyOnly ? 'Evaluate Policy' : 'Send Request'}</span>
@@ -99,13 +100,13 @@ export const SimulationControls: React.FC = () => {
           onClick={toggleTaskFlow}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
             highlightTaskFlow
-              ? 'bg-circuit-50 text-circuit-700 border-circuit-300 shadow-xs'
+              ? 'bg-circuit-50 text-circuit-700 border-circuit-300'
               : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
           }`}
-          title={highlightTaskFlow ? 'Task flow lines highlighted (click to disable)' : 'Click to highlight task flow lines'}
+          aria-pressed={highlightTaskFlow}
+          title="Highlight task flow lines"
         >
-          <span>Task Flow</span>
-          <span className={`w-1.5 h-1.5 rounded-full ${highlightTaskFlow ? 'bg-circuit-600 animate-pulse' : 'bg-slate-300'}`} />
+          <span>Task flow</span>
         </button>
 
         {/* AWS Decision Trace - WHAT/WHERE/WHY/WHICH-AWS-RULE for the request just simulated */}
@@ -113,10 +114,10 @@ export const SimulationControls: React.FC = () => {
           onClick={() => setIsTraceOpen(true)}
           disabled={!requestTrace}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all"
-          title="See the decision-by-decision AWS explanation for the last request"
+          title="Decision-by-decision AWS trace for the last request"
         >
           <RouteIcon className="w-3.5 h-3.5" />
-          <span>AWS Explanation</span>
+          <span>Trace</span>
         </button>
       </div>
 
@@ -171,8 +172,8 @@ export const SimulationControls: React.FC = () => {
 
         {/* Step Counter */}
         {simulationResult && (
-          <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
-            Step <span className="text-slate-900 font-semibold">{currentStepNum}</span> of {totalSteps}
+          <div className="text-xs font-mono tabular-nums text-slate-500">
+            <span className="text-slate-900 font-semibold">{currentStepNum}</span>/{totalSteps}
           </div>
         )}
 
@@ -209,15 +210,11 @@ export const SimulationControls: React.FC = () => {
             ) : (
               <XCircle className="w-3.5 h-3.5 text-rose-600" />
             )}
-            <span>{checkOnly ? `${configurationOnly ? 'Configuration' : 'Policy'} ${simulationResult.success ? 'PASS' : 'FAIL'}` : `HTTP ${simulationResult.statusCode}`}</span>
-            {!checkOnly && <span className="text-[10px] opacity-80">({simulationResult.totalLatencyMs}ms)</span>}
+            <span>{resultLabel(simulationResult)}</span>
+            {resultEvidence(simulationResult).kind === 'request' && <span className="text-[10px] opacity-80">({simulationResult.totalLatencyMs}ms)</span>}
           </div>
         </div>
-      ) : (
-        <div className="text-xs text-slate-500 font-mono hidden md:block">
-          Ready to simulate flow
-        </div>
-      )}
+      ) : null}
 
       <RequestTraceModal isOpen={isTraceOpen} onClose={() => setIsTraceOpen(false)} />
     </div>

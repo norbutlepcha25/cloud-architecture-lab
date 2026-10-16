@@ -1,3 +1,10 @@
+import { LambdaConfigurationPanel } from './LambdaConfigurationPanel.tsx';
+import { DatabaseConfigurationPanel } from './DatabaseConfigurationPanel.tsx';
+import { S3ConfigurationPanel } from './S3ConfigurationPanel.tsx';
+import { Ec2ConfigurationPanel } from './Ec2ConfigurationPanel.tsx';
+import { EksConfigurationPanel } from './EksConfigurationPanel.tsx';
+import { InspectorAccordion } from './InspectorAccordion.tsx';
+import { inspectorProfile } from './inspectorProfile.ts';
 import { COMPASS_POINTS, compassHandleId } from '../../utils/compassHandles.ts';
 import { eksComponent } from '../../data/eksComponents.ts';
 import { EksComponentPanel } from './EksComponentPanel.tsx';
@@ -7,7 +14,6 @@ import { ManagedServicePanel } from './ManagedServicePanel.tsx';
 import { Ec2IamRolePanel } from './Ec2IamRolePanel.tsx';
 import { createTeachingNacl } from '../../engine/network/naclPreset.ts';
 import { NetworkIdentityPanel } from './NetworkIdentityPanel.tsx';
-import { SUBNET_REQUIRED_SERVICE_IDS } from '../../engine/layout/containment.ts';
 import { relationshipKind, type RelationshipKind } from '../../engine/architecture/relationships.ts';
 import { EndpointConfigurationPanel } from './EndpointConfigurationPanel.tsx';
 import { supportsSecurityGroupAttachment } from '../../engine/network/securityGroupAttachment.ts';
@@ -46,20 +52,11 @@ import {
   AlertTriangle,
   Plus,
   DollarSign,
-  HardDrive,
-  Cpu,
   Database,
   Info
 } from 'lucide-react';
 import { VpcGroupIcon, PublicSubnetGroupIcon, PrivateSubnetGroupIcon } from '../icons/AwsGroupIcons.tsx';
-import {
-  calculateNodeCost,
-  EC2_INSTANCE_TYPES,
-  EC2_OS_IMAGES,
-  EBS_VOLUME_TYPES,
-  S3_STORAGE_CLASSES,
-  RDS_INSTANCE_TYPES
-} from '../../engine/cost/costCalculator.ts';
+import { calculateNodeCost } from '../../engine/cost/costCalculator.ts';
 
 export const ServiceInspector: React.FC = () => {
   const {
@@ -90,7 +87,7 @@ export const ServiceInspector: React.FC = () => {
     setShowNaclSideColumn
   } = useArchitecture();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'config' | 'learn'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'config'>('overview');
   const [showAttachSgMenu, setShowAttachSgMenu] = useState(false);
   const [serviceExplorerNodeId, setServiceExplorerNodeId] = useState<string | null>(null);
 
@@ -150,6 +147,7 @@ export const ServiceInspector: React.FC = () => {
 
         {/* Edge Body */}
         <div className="p-4 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+          <InspectorAccordion key={selectedEdge.id} title="Connection settings">
           {/* Flow of Task Live Status */}
           <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 shadow-xs space-y-2.5">
             <div className="flex items-center justify-between">
@@ -265,6 +263,12 @@ export const ServiceInspector: React.FC = () => {
           <p className="text-xs text-slate-500">Transport: {['HTTP', 'HTTPS', 'TCP'].includes(edgeData.protocol) ? edgeData.protocol : edgeData.protocol === 'DNS' ? 'UDP' : ['SQL', 'gRPC'].includes(edgeData.protocol) ? 'TCP' : 'HTTPS'}</p>
           <div className="grid grid-cols-2 gap-2">{endpointSide('source')}{endpointSide('target')}</div>
           <p className="text-xs text-slate-500">Drag either end of the selected edge onto another connection dot, or choose its side here. Export saves the changes.</p>
+          <label className="block text-xs">Destination port (optional)
+            <input aria-label="Destination port" type="number" min={1} max={65535} step={1}
+              className="block border rounded p-2 w-full" value={selectedEdge.data?.destinationPort ?? ''}
+              onChange={e => updateEdgeData(selectedEdge.id, { destinationPort: e.target.value === '' ? undefined : Number(e.target.value) })} />
+            <span className="text-slate-500">Checks this port against inbound firewall rules. Blank retains the protocol abstraction.</span>
+          </label>
           <label className="block text-xs">API operation
             <select className="block border rounded p-2 w-full" value={selectedEdge.data?.action ?? ''} onChange={e => updateEdgeData(selectedEdge.id, { action: e.target.value || undefined })}>
               <option value="">Default service operation</option>
@@ -313,6 +317,7 @@ export const ServiceInspector: React.FC = () => {
                 : 'Asynchronous decoupling with message queues acts as a shock absorber, protecting downstream databases from thundering herds.'}
             </p>
           </div>
+          </InspectorAccordion>
         </div>
 
         {/* Delete Edge Footer */}
@@ -520,6 +525,7 @@ export const ServiceInspector: React.FC = () => {
 
         {/* Boundary Inspector Body */}
         <div className="p-4 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+          <InspectorAccordion key={selectedNode.id} title={`${config.title} settings`}>
           {/* Label Input */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -956,6 +962,7 @@ export const ServiceInspector: React.FC = () => {
               ))}
             </div>
           </div>
+          </InspectorAccordion>
         </div>
 
         {/* Footer Actions */}
@@ -980,6 +987,7 @@ export const ServiceInspector: React.FC = () => {
   }
 
   const nodeData = selectedNode.data || ({} as any);
+  const profile = inspectorProfile(nodeData);
   const serviceDef = SERVICE_MAP[nodeData.serviceId] || {
     name: nodeData.label || 'Custom Component',
     category: nodeData.category || 'Compute',
@@ -1076,46 +1084,28 @@ export const ServiceInspector: React.FC = () => {
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1 mt-3 border-b border-slate-200 -mb-4 pt-1">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`pb-2 px-2 text-xs transition-colors ${
-              activeTab === 'overview'
-                ? 'border-b-2 border-slate-900 text-slate-900 font-semibold'
-                : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 font-medium'
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('config')}
-            className={`pb-2 px-2 text-xs transition-colors ${
-              activeTab === 'config'
-                ? 'border-b-2 border-slate-900 text-slate-900 font-semibold'
-                : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 font-medium'
-            }`}
-          >
-            Config
-          </button>
-          <button
-            onClick={() => setActiveTab('learn')}
-            className={`pb-2 px-2 text-xs transition-colors ${
-              activeTab === 'learn'
-                ? 'border-b-2 border-slate-900 text-slate-900 font-semibold'
-                : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 font-medium'
-            }`}
-          >
-            Teaching Notes
-          </button>
 
+        <div role="tablist" aria-label="Service inspector" className="flex gap-1 mt-3 border-b border-slate-200">
+          {(['overview', 'config'] as const).map(tab => <button key={tab} type="button" role="tab"
+            id={`inspector-${tab}-tab`} aria-selected={activeTab === tab} aria-controls={`inspector-${tab}-panel`}
+            tabIndex={activeTab === tab ? 0 : -1}
+            onClick={() => setActiveTab(tab)}
+            onKeyDown={event => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const next = event.key === 'Home' ? 'overview' : event.key === 'End' ? 'config' : tab === 'overview' ? 'config' : 'overview';
+              setActiveTab(next);
+              document.getElementById(`inspector-${next}-tab`)?.focus();
+            }}
+            className={`min-h-11 px-3 text-xs border-b-2 focus-visible:outline focus-visible:outline-circuit-600 ${activeTab === tab ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+            {tab === 'overview' ? 'Overview' : 'Config'}
+          </button>)}
         </div>
       </div>
 
       {/* Tab Body */}
       <div className="p-4 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
-        {activeTab === 'overview' && (
-          <>
+        <div role="tabpanel" id="inspector-overview-panel" aria-labelledby="inspector-overview-tab" hidden={activeTab !== 'overview'} className="space-y-4">
             {/* Live Simulation Activity */}
             {isNodeActiveInSimulation ? (
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-1">
@@ -1241,11 +1231,11 @@ export const ServiceInspector: React.FC = () => {
                 </div>
               );
             })()}
-          </>
-        )}
+        </div>
 
-        {activeTab === 'config' && (
-          <div className="space-y-3.5">
+        <div role="tabpanel" id="inspector-config-panel" aria-labelledby="inspector-config-tab" hidden={activeTab !== 'config'}>
+          <div key={selectedNode.id} className="space-y-3.5">
+            <InspectorAccordion title="Display label">
             {/* Display Name */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1259,7 +1249,10 @@ export const ServiceInspector: React.FC = () => {
               />
             </div>
 
+            </InspectorAccordion>
+
             {/* Availability Zone Placement */}
+            {profile.az && <InspectorAccordion title="Availability zone">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Availability Zone Placement
@@ -1272,14 +1265,15 @@ export const ServiceInspector: React.FC = () => {
                 <option value="AZ-A">Availability Zone A (us-east-1a)</option>
                 <option value="AZ-B">Availability Zone B (us-east-1b)</option>
                 <option value="AZ-C">Availability Zone C (us-east-1c)</option>
-                <option value="Multi-AZ">Multi-AZ Redundant</option>
-                <option value="Edge / Global">Edge / Global Anycast</option>
+                {!['AZ-A', 'AZ-B', 'AZ-C'].includes(nodeData.az) && <option value={nodeData.az}>Saved placement: {nodeData.az}</option>}
               </select>
             </div>
+            </InspectorAccordion>}
 
             {/* Subnet Type - derived live from where this node actually sits on the canvas,
                 relative to Public/Private subnet boundaries, so it can never drift from what
                 the diagram visually shows. Drag the node to change it, not this panel. */}
+            {profile.network && <InspectorAccordion title="Subnet placement">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Subnet Security Boundary
@@ -1304,12 +1298,13 @@ export const ServiceInspector: React.FC = () => {
                 Derived automatically from where this node sits on the canvas relative to Public/Private subnet boundaries. Drag it into or out of a subnet box to change this.
               </p>
             </div>
+            </InspectorAccordion>}
 
             {/* Security Groups - attached by explicit reference, exactly like a real AWS
                 instance's Security tab. Unlike the subnet above, this has nothing to do with
                 where the node sits on the canvas: attach or detach any Security Group here, and
                 edit its rules directly - changes apply everywhere that group is attached. */}
-            {supportsSecurityGroupAttachment(nodeData) && <div>
+            {supportsSecurityGroupAttachment(nodeData) && (nodeData.serviceId !== 'eks' || profile.network) && <InspectorAccordion title="Security groups"><div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-slate-500" />
                 Security Groups
@@ -1453,26 +1448,12 @@ export const ServiceInspector: React.FC = () => {
                   </div>
                 );
               })()}
-            </div>}
+            </div></InspectorAccordion>}
 
-            {/* Replicas Slider */}
-            <div>
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Task / Instance Replicas</span>
-                <span className="font-mono text-circuit-600 font-bold">{nodeData.replicas || 1}</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={nodeData.replicas || 1}
-                onChange={(e) => updateNodeData(selectedNode.id, { replicas: Number(e.target.value) })}
-                className="w-full accent-circuit-600"
-              />
-            </div>
+            {!profile.configuration && !activeLabReference?.configurationChecks && <p className="text-xs text-slate-500">No service-specific configuration panel is available for this service yet. Shared diagram controls remain available; behavior coverage is limited to the existing model.</p>}
 
             {/* Multi-AZ Toggle */}
-            <div className="pt-1">
+            {profile.multiAz && <InspectorAccordion title="RDS availability"><div className="pt-1">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1484,353 +1465,49 @@ export const ServiceInspector: React.FC = () => {
                   Multi-AZ Synchronous Hot Standby
                 </span>
               </label>
-            </div>
+            </div></InspectorAccordion>}
 
             {/* ---------------------------------------------------- */}
             {/* SERVICE-SPECIFIC AWS CONFIGURATION (EC2, S3, RDS, etc.) */}
             {/* ---------------------------------------------------- */}
-            {activeLabReference?.configurationChecks && nodeData.customConfig && <LabConfigurationPanel key={selectedNode.id} config={nodeData.customConfig} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} />}
-            {nodeData.serviceId === 'route_tables' && <LabConfigurationPanel key={selectedNode.id} config={nodeData.customConfig ?? { routeTable: { routes: [] } }} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} />}
-            {['sqs', 'sns', 'cloudwatch', 'cloudtrail'].includes(nodeData.serviceId) && <ManagedServicePanel key={selectedNode.id} />}
-            {nodeData.serviceId === 'ec2' && <Ec2IamRolePanel key={selectedNode.id} data={nodeData} nodes={nodes} onChange={iamRole => updateNodeData(selectedNode.id, { iamRole })} />}
-            {SUBNET_REQUIRED_SERVICE_IDS.includes(nodeData.serviceId) && <NetworkIdentityPanel data={nodeData} nodes={nodes} onChange={networkIdentity => updateNodeData(selectedNode.id, { networkIdentity })} />}
-            {['s3_gateway_endpoint', 'privatelink'].includes(nodeData.serviceId) && <EndpointConfigurationPanel data={nodeData} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} />}
-            {nodeData.serviceId === 'ecs' && <EcsConfigurationPanel data={nodeData} onChange={(customConfig) => updateNodeData(selectedNode.id, { customConfig })} />}
-            {['ec2_auto_scaling', 'cloudwatch'].includes(nodeData.serviceId) && <AsgPanel key={`asg-${selectedNode.id}`} />}
+            {activeLabReference?.configurationChecks && nodeData.customConfig && <InspectorAccordion title="Course configuration"><LabConfigurationPanel key={selectedNode.id} config={nodeData.customConfig} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {profile.configuration === 'routes' && <InspectorAccordion title="Route table configuration"><LabConfigurationPanel key={selectedNode.id} config={nodeData.customConfig ?? { routeTable: { routes: [] } }} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {profile.configuration === 'operations' && <InspectorAccordion title={`${serviceDef.name} operations`}><ManagedServicePanel key={selectedNode.id} /></InspectorAccordion>}
+            {profile.configuration === 'instance' && <InspectorAccordion title="EC2 IAM role"><Ec2IamRolePanel key={selectedNode.id} data={nodeData} nodes={nodes} onChange={iamRole => updateNodeData(selectedNode.id, { iamRole })} /></InspectorAccordion>}
+            {profile.network && <InspectorAccordion title="Network identity"><NetworkIdentityPanel data={nodeData} nodes={nodes} onChange={networkIdentity => updateNodeData(selectedNode.id, { networkIdentity })} /></InspectorAccordion>}
+            {profile.configuration === 'endpoint' && <InspectorAccordion title="VPC endpoint configuration"><EndpointConfigurationPanel data={nodeData} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {profile.configuration === 'eks' && <InspectorAccordion title="EKS cluster and workload"><EksConfigurationPanel data={nodeData} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {profile.configuration === 'ecs' && <InspectorAccordion title="ECS service configuration"><EcsConfigurationPanel data={nodeData} onChange={(customConfig) => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {(profile.configuration === 'scaling' || (nodeData.serviceId === 'cloudwatch' && nodes.some(node => node.data.serviceId === 'ec2_auto_scaling' && node.data.customConfig?.asg?.alarmId === selectedNode.id))) && <InspectorAccordion title="EC2 Auto Scaling"><AsgPanel key={`asg-${selectedNode.id}`} /></InspectorAccordion>}
             {nodeData.serviceId === 'ec2' && (
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 border-b border-slate-200 pb-2">
-                  <Server className="w-3.5 h-3.5 text-orange-600" />
-                  <span>Amazon EC2 Instance Configuration</span>
-                </div>
-
-                {/* OS Image / AMI */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Amazon Machine Image (AMI / OS)
-                  </label>
-                  <select
-                    value={nodeData.customConfig?.osImage || 'al2023'}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, osImage: e.target.value }
-                    } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-sans"
-                  >
-                    {EC2_OS_IMAGES.map(img => (
-                      <option key={img.id} value={img.id}>{img.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Instance Type / Size */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Instance Type / Size
-                  </label>
-                  <select
-                    value={nodeData.customConfig?.instanceType || 't3.micro'}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, instanceType: e.target.value }
-                    } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-mono"
-                  >
-                    {['General Purpose', 'Compute Optimized', 'Memory Optimized', 'Accelerated / GPU'].map(family => (
-                      <optgroup key={family} label={family}>
-                        {Object.entries(EC2_INSTANCE_TYPES)
-                          .filter(([_, def]) => def.family === family)
-                          .map(([key, def]) => (
-                            <option key={key} value={key}>
-                              {key} • {def.vCpu} vCPU, {def.ramGb}GB (${(def.hourly * 730).toFixed(2)}/mo)
-                            </option>
-                          ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Purchasing Option */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Purchasing Option
-                  </label>
-                  <select
-                    value={nodeData.customConfig?.purchasingOption || 'on_demand'}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, purchasingOption: e.target.value }
-                    } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 text-xs"
-                  >
-                    <option value="on_demand">On-Demand (Standard hourly)</option>
-                    <option value="savings_plan_1yr">Compute Savings Plan 1-Yr (~35% discount)</option>
-                    <option value="savings_plan_3yr">Compute Savings Plan 3-Yr (~55% discount)</option>
-                    <option value="spot">Spot Instances (Up to 70% discount, interruptible)</option>
-                  </select>
-                </div>
-
-                {/* EBS Root Storage Volume */}
-                <div className="space-y-2 pt-1 border-t border-slate-200">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                    <span className="flex items-center gap-1">
-                      <HardDrive className="w-3.5 h-3.5 text-slate-500" />
-                      EBS Volume Storage
-                    </span>
-                    <span className="font-mono text-circuit-600 font-bold">
-                      {nodeData.customConfig?.ebsVolumeSizeGb || 30} GB
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-500 mb-0.5">Volume Type</label>
-                      <select
-                        value={nodeData.customConfig?.ebsVolumeType || 'gp3'}
-                        onChange={(e) => updateNodeData(selectedNode.id, {
-                          customConfig: { ...nodeData.customConfig, ebsVolumeType: e.target.value }
-                        } as any)}
-                        className="w-full px-2 py-1 text-xs rounded bg-white border border-slate-300 font-mono"
-                      >
-                        {Object.entries(EBS_VOLUME_TYPES).map(([k, def]) => (
-                          <option key={k} value={k}>{k.toUpperCase()} (${def.costPerGb}/GB)</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-500 mb-0.5">Size (GB)</label>
-                      <input
-                        type="number"
-                        min="8"
-                        max="2000"
-                        value={nodeData.customConfig?.ebsVolumeSizeGb || 30}
-                        onChange={(e) => updateNodeData(selectedNode.id, {
-                          customConfig: { ...nodeData.customConfig, ebsVolumeSizeGb: Number(e.target.value) }
-                        } as any)}
-                        className="w-full px-2 py-1 text-xs rounded bg-white border border-slate-300 font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <InspectorAccordion title="EC2 instance configuration">
+                <Ec2ConfigurationPanel data={nodeData} onChange={patch => updateNodeData(selectedNode.id, patch)} />
+              </InspectorAccordion>
             )}
 
             {/* S3 Storage Configuration */}
             {(nodeData.serviceId === 's3' || nodeData.serviceId === 's3_client' || nodeData.serviceId === 's3_managed') && (
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 border-b border-slate-200 pb-2">
-                  <HardDrive className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Amazon S3 Bucket Configuration</span>
-                </div>
-
-                {/* Storage Class Dropdown */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    S3 Storage Class / Tier
-                  </label>
-                  <select
-                    value={nodeData.customConfig?.storageClass || 'STANDARD'}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, storageClass: e.target.value }
-                    } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-sans"
-                  >
-                    {Object.entries(S3_STORAGE_CLASSES).map(([k, def]) => (
-                      <option key={k} value={k}>{def.label} — {def.desc}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Data Volume Capacity */}
-                <div>
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-                    <span>Stored Data Capacity</span>
-                    <span className="font-mono text-circuit-600 font-bold">
-                      {(nodeData.customConfig?.storageGb || 50) >= 1000
-                        ? `${((nodeData.customConfig?.storageGb || 50) / 1000).toFixed(1)} TB`
-                        : `${nodeData.customConfig?.storageGb || 50} GB`}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="10000"
-                    step="5"
-                    value={nodeData.customConfig?.storageGb || 50}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, storageGb: Number(e.target.value) }
-                    } as any)}
-                    className="w-full accent-circuit-600"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-400 font-mono mt-0.5">
-                    <span>5 GB</span>
-                    <span>1 TB</span>
-                    <span>10 TB</span>
-                  </div>
-                </div>
-
-                {/* S3 Security & Versioning Features */}
-                <div className="pt-2 border-t border-slate-200 space-y-1.5">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={nodeData.customConfig?.versioning !== false}
-                      onChange={(e) => updateNodeData(selectedNode.id, {
-                        customConfig: { ...nodeData.customConfig, versioning: e.target.checked }
-                      } as any)}
-                      className="rounded border-slate-300 text-circuit-600"
-                    />
-                    <span>Bucket Versioning Enabled</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={nodeData.customConfig?.blockPublicAccess !== false}
-                      onChange={(e) => updateNodeData(selectedNode.id, {
-                        customConfig: { ...nodeData.customConfig, blockPublicAccess: e.target.checked }
-                      } as any)}
-                      className="rounded border-slate-300 text-circuit-600"
-                    />
-                    <span>Block All Public Access (AWS Default)</span>
-                  </label>
-                </div>
-              </div>
+              <InspectorAccordion title="S3 bucket configuration">
+                <S3ConfigurationPanel data={nodeData} onChange={patch => updateNodeData(selectedNode.id, patch)} />
+              </InspectorAccordion>
             )}
 
             {/* RDS Database Configuration */}
             {(nodeData.serviceId === 'rds' || nodeData.serviceId === 'aurora') && (
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 border-b border-slate-200 pb-2">
-                  <Database className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Amazon RDS Database Configuration</span>
-                </div>
-
-                {/* Database Engine */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Database Engine
-                  </label>
-                  <select
-                    value={nodeData.customConfig?.dbEngine || 'PostgreSQL'}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, dbEngine: e.target.value }
-                    } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 font-sans"
-                  >
-                    <option value="PostgreSQL">PostgreSQL (Community Edition)</option>
-                    <option value="MySQL">MySQL Community</option>
-                    <option value="Aurora PostgreSQL">Amazon Aurora (PostgreSQL Compatible)</option>
-                    <option value="Aurora MySQL">Amazon Aurora (MySQL Compatible)</option>
-                    <option value="MariaDB">MariaDB</option>
-                  </select>
-                </div>
-
-                {/* DB Instance Class */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    DB Instance Class
-                  </label>
-                  <select
-                    value={nodeData.customConfig?.dbInstanceClass || 'db.t4g.micro'}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, dbInstanceClass: e.target.value }
-                    } as any)}
-                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 font-mono"
-                  >
-                    {Object.entries(RDS_INSTANCE_TYPES).map(([k, def]) => (
-                      <option key={k} value={k}>
-                        {def.label} (${(def.hourly * 730).toFixed(2)}/mo)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Allocated Storage */}
-                <div>
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1">
-                    <span>Allocated Storage (gp3)</span>
-                    <span className="font-mono text-circuit-600 font-bold">
-                      {nodeData.customConfig?.storageGb || 50} GB
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="20"
-                    max="1000"
-                    step="10"
-                    value={nodeData.customConfig?.storageGb || 50}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, storageGb: Number(e.target.value) }
-                    } as any)}
-                    className="w-full accent-circuit-600"
-                  />
-                </div>
-              </div>
+              <InspectorAccordion title="Database configuration">
+                <DatabaseConfigurationPanel data={nodeData} onChange={patch => updateNodeData(selectedNode.id, patch)} />
+              </InspectorAccordion>
             )}
 
             {/* AWS Lambda Configuration */}
             {(nodeData.serviceId === 'lambda' || nodeData.serviceId === 'step_lambda') && (
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 border-b border-slate-200 pb-2">
-                  <Cpu className="w-3.5 h-3.5 text-amber-600" />
-                  <span>AWS Lambda Function Configuration</span>
-                </div>
-
-                {/* CPU Architecture */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Instruction Set Architecture
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateNodeData(selectedNode.id, {
-                        customConfig: { ...nodeData.customConfig, architecture: 'arm64' }
-                      } as any)}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
-                        (nodeData.customConfig?.architecture || 'arm64') === 'arm64'
-                          ? 'bg-circuit-50 border-circuit-500 text-circuit-800'
-                          : 'bg-white border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      arm64 (Graviton2, -20% cost)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateNodeData(selectedNode.id, {
-                        customConfig: { ...nodeData.customConfig, architecture: 'x86_64' }
-                      } as any)}
-                      className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
-                        nodeData.customConfig?.architecture === 'x86_64'
-                          ? 'bg-circuit-50 border-circuit-500 text-circuit-800'
-                          : 'bg-white border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      x86_64
-                    </button>
-                  </div>
-                </div>
-
-                {/* Memory Allocation */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Allocated Memory: {nodeData.customConfig?.memoryMb || 256} MB
-                  </label>
-                  <input
-                    type="range"
-                    min="128"
-                    max="3008"
-                    step="128"
-                    value={nodeData.customConfig?.memoryMb || 256}
-                    onChange={(e) => updateNodeData(selectedNode.id, {
-                      customConfig: { ...nodeData.customConfig, memoryMb: Number(e.target.value) }
-                    } as any)}
-                    className="w-full accent-circuit-600"
-                  />
-                </div>
-              </div>
+              <InspectorAccordion title="Lambda function configuration">
+                <LambdaConfigurationPanel data={nodeData} onChange={patch => updateNodeData(selectedNode.id, patch)} />
+              </InspectorAccordion>
             )}
 
             {/* ---------------------------------------------------- */}
+            <InspectorAccordion title="Cost estimate">
             {/* LIVE PER-RESOURCE AWS PRICING PREVIEW CARD */}
             {/* ---------------------------------------------------- */}
             {(() => {
@@ -1882,6 +1559,9 @@ export const ServiceInspector: React.FC = () => {
               );
             })()}
 
+            </InspectorAccordion>
+
+            <InspectorAccordion title="Diagram layout">
             {/* Stacking Layer (Z-Index) */}
             <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
               <div className="flex items-center justify-between">
@@ -1934,10 +1614,11 @@ export const ServiceInspector: React.FC = () => {
                 </button>
               </div>
             </div>
+            </InspectorAccordion>
           </div>
-        )}
+        </div>
 
-        {activeTab === 'learn' && (
+        <InspectorAccordion key={`${selectedNode.id}-learn`} title="Teaching Notes">
           <div className="space-y-4 text-xs text-slate-700">
             {/* Failure Modes */}
             <div>
@@ -1965,7 +1646,7 @@ export const ServiceInspector: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
+        </InspectorAccordion>
       </div>
 
       {/* Delete Node Footer */}

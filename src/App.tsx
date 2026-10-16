@@ -1,3 +1,4 @@
+import { AnalyticsObserver } from './analytics/AnalyticsObserver.tsx';
 import { HomePage } from './components/home/HomePage.tsx';
 import { AppFooter } from './components/layout/AppFooter.tsx';
 import React, { useState } from 'react';
@@ -102,7 +103,7 @@ const AppContent: React.FC<{ onHome: () => void }> = ({ onHome }) => {
 };
 
 export const App: React.FC = () => {
-  const [page, setPage] = useState(() => window.location.hash === '#lab' ? 'lab' : 'home');
+  const [page, setPage] = useState<'home' | 'lab'>(() => window.location.hash === '#lab' ? 'lab' : 'home');
   React.useEffect(() => {
     const sync = () => setPage(window.location.hash === '#lab' ? 'lab' : 'home');
     window.addEventListener('hashchange', sync);
@@ -111,6 +112,7 @@ export const App: React.FC = () => {
   const navigate = (next: 'home' | 'lab') => { window.location.hash = next === 'lab' ? 'lab' : 'home'; setPage(next); };
   return (
     <ArchitectureProvider>
+      <AnalyticsObserver page={page} />
       {page === 'home' && <HomePage onStart={() => navigate('lab')} />}
       {page === 'lab' && <AppContent onHome={() => navigate('home')} />}
     </ArchitectureProvider>

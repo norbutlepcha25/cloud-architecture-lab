@@ -36,16 +36,15 @@ export function CanvasLayers({ nodes, hidden, onChange }: {
   }
   return <div ref={containerRef} className="relative" onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
     <button type="button" aria-expanded={open} aria-controls="canvas-layers" onClick={() => setOpen(!open)}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-xs dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200">
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200">
       <Layers className="w-3.5 h-3.5" /> Layers
-      {hidden.size > 0 && <span>({hidden.size} hidden)</span>}
+      {hidden.size > 0 && <span className="text-slate-400">· {hidden.size} hidden</span>}
     </button>
     {open && <div id="canvas-layers" className="absolute top-full right-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 nowheel nodrag nopan">
       <div className="flex justify-between items-center mb-2">
-        <strong className="text-sm">Canvas layers</strong>
-        <button type="button" onClick={() => onChange(new Set())} className="text-xs text-blue-700 dark:text-sky-300 hover:underline">Show all</button>
+        <strong className="text-sm font-semibold" title="Visibility only. Hidden boundaries keep their resources and behavior.">Layers</strong>
+        <button type="button" onClick={() => onChange(new Set())} className="text-xs text-slate-500 hover:text-slate-900 dark:text-slate-400">Show all</button>
       </div>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Visibility only. Hidden boundaries keep their resources and behavior.</p>
       <div className="max-h-72 overflow-y-auto">
         {Array.from(layers).map(([key, layer]) => <label key={key} className="flex items-center gap-2 py-1.5 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
           <input type="checkbox" checked={!hidden.has(key)} onChange={() => {

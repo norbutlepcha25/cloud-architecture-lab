@@ -276,15 +276,6 @@ export const ServicePalette: React.FC = () => {
       {activeTab === 'boundaries' ? (
         /* =================== VPC & BOUNDARIES PALETTE =================== */
         <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5 custom-scrollbar">
-          <div className="px-1 pt-1 pb-0.5">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Network & Security Boundaries
-            </h3>
-            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-              Drag containers onto canvas to design VPCs, subnets, and security groups matching official AWS architecture standards.
-            </p>
-          </div>
-
           <div className="divide-y divide-slate-100 -mx-1">
             {BOUNDARY_DEFINITIONS.map((boundary) => (
               <div
@@ -292,7 +283,8 @@ export const ServicePalette: React.FC = () => {
                 draggable
                 onDragStart={(e) => onDragStartBoundary(e, boundary.boundaryType)}
                 onClick={() => addBoundaryNode(boundary.boundaryType)}
-                className="group flex items-start gap-2.5 px-1 py-2.5 cursor-grab active:cursor-grabbing"
+                title={boundary.description}
+                className="group flex items-start gap-2.5 px-1 py-2 cursor-grab active:cursor-grabbing"
               >
                 {/* Color swatch - matches the boundary's actual on-canvas border color */}
                 <span
@@ -317,9 +309,6 @@ export const ServicePalette: React.FC = () => {
                     </button>
                   </div>
                   <div className="text-[10px] text-slate-500">{boundary.subtitle}</div>
-                  <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
-                    {boundary.description}
-                  </p>
                 </div>
               </div>
             ))}
@@ -489,19 +478,6 @@ export const ServicePalette: React.FC = () => {
           </div>
         </>
       )}
-
-      {/* Palette Footer Tip */}
-      <div className="p-2.5 border-t border-slate-200 bg-white text-[10px] text-slate-500 flex items-center justify-between">
-        <span>Drag a service onto the canvas to add it</span>
-        {activeTab === 'services' && (
-          <button
-            onClick={() => setActiveTab('boundaries')}
-            className="text-emerald-700 hover:underline font-semibold"
-          >
-            VPC Subnets &rarr;
-          </button>
-        )}
-      </div>
 
       </div>
 

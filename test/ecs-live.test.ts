@@ -51,7 +51,7 @@ test('ECS-LIVE-004: SQL needs network access, not a task IAM role; failed DB rem
   assert.equal(runLiveSimulation(nodes, links, scenario).success, true);
   nodes[1].data.health = 'failed';
   const failed = runLiveSimulation(nodes, links, scenario);
-  assert.equal(failed.success, false); assert.equal(traceFromSimulation(failed).final, 'DENIED');
+  assert.equal(failed.success, false); assert.equal(traceFromSimulation(failed).final, 'FAILURE');
 });
 test('ECS-LIVE-005: Fargate requires awsvpc, invalid counts rejected, desired count does not imply running tasks', () => {
   const app = node('app', 'ecs', { customConfig: { ecs: { launchType: 'FARGATE', networkMode: 'bridge', desiredCount: -1 } } });

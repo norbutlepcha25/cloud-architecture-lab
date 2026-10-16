@@ -57,8 +57,9 @@ export interface TraceEntry {
 /** The full explainable trace for one request (a single hop, or an entire multi-hop path -
  *  `explainRequest` renumbers `order` across hops so the whole thing reads as one sequence). */
 export interface RequestTrace {
+  kind?: import('../../types/index.ts').SimulationResultKind;
   entries: TraceEntry[];
-  final: 'SUCCESS' | 'DENIED';
+  final: 'SUCCESS' | 'DENIED' | 'FAILURE' | 'UNSUPPORTED';
   /** The one-sentence answer to "why did this end up SUCCESS/DENIED" - for DENIED, this is the
    *  first blocking entry's `reason`, exactly like the spec's own worked failure example
    *  ("WHY: RDS Security Group has no inbound TCP 5432 rule allowing the source."). */

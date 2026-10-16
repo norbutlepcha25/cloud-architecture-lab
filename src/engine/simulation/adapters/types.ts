@@ -90,7 +90,7 @@ export interface AdapterContext {
   legacyCapacity?: boolean;
   /** Runs the shared NACL-then-Security-Group check for one hop; pushes a step per evaluated
    *  layer and returns true if the caller should stop traversal (a layer blocked). */
-  pushFirewallBlockIfAny: (source: Node<ServiceNodeData>, target: Node<ServiceNodeData>, protocol: string) => boolean;
+  pushFirewallBlockIfAny: (source: Node<ServiceNodeData>, target: Node<ServiceNodeData>, protocol: string, evidence?: SimulationTrace, connection?: Edge<ConnectionData>) => boolean;
 }
 
 /** What an adapter tells the orchestrator to do after evaluating the current hop. */

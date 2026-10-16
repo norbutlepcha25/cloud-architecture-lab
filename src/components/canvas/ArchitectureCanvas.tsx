@@ -3,6 +3,8 @@ import { ReferenceLibrary } from '../references/ReferenceLibrary.tsx';
 import { SaveLabDiagram } from '../labs/SaveLabDiagram.tsx';
 import { CanvasLayers, canvasLayerKey } from './CanvasLayers.tsx';
 import { asgMembershipFrames } from '../../engine/layout/asgMembershipFrames.ts';
+import { detectStrayComponents, STRAY_REASON_TEXT } from '../../engine/analysis/strayComponents.ts';
+import { StrayNotice } from './StrayNotice.tsx';
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
@@ -12,7 +14,8 @@ import {
   ConnectionLineType,
   ConnectionMode,
   Panel,
-  Node
+  Node,
+  type ReactFlowInstance
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -24,7 +27,7 @@ import { NodeContextMenu } from './NodeContextMenu.tsx';
 import { NodeStatusModal } from './NodeStatusModal.tsx';
 import { SERVICE_MAP } from '../../data/serviceCatalog.ts';
 import { ServiceNodeData, NodeHealth } from '../../types/index.ts';
-import { Route, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { useTheme } from '../../utils/theme.ts';
 
 const nodeTypes = {
@@ -60,22 +63,37 @@ export const ArchitectureCanvas: React.FC = () => {
     sendToBack,
     bringForward,
     sendBackward,
-    highlightTaskFlow,
-    toggleTaskFlow,
-    simulationResult,
     showNaclSideColumn,
     setShowNaclSideColumn,
-    hasCustomNacl,
-    hasMissingReturnNacl
+    hasCustomNacl
   } = useArchitecture();
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [theme] = useTheme();
   const dark = theme === 'dark';
   const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
+  // Connection dots stay hidden until a node is hovered/selected; while a connection is being
+  // dragged every node shows them so the drop target is visible.
+  const [isConnecting, setIsConnecting] = useState(false);
   // Project visibility into React Flow without modifying the architecture used by the engine.
   const hiddenNodeIds = new Set(nodes.filter(node => hiddenLayers.has(canvasLayerKey(node))).map(node => node.id));
-  const visibleNodes = nodes.map(node => hiddenNodeIds.has(node.id) ? { ...node, hidden: true } : node);
+  const strayComponents = React.useMemo(() => detectStrayComponents(nodes, edges), [nodes, edges]);
+  const strayById = new Map(strayComponents.map(item => [item.nodeId, item.reasons.map(reason => STRAY_REASON_TEXT[reason])]));
+  const visibleNodes = nodes.map(node => {
+    const flagged = strayById.get(node.id);
+    const shown = flagged ? { ...node, data: { ...node.data, strayReasons: flagged } } : node;
+    return hiddenNodeIds.has(node.id) ? { ...shown, hidden: true } : shown;
+  });
+  const flowInstance = useRef<ReactFlowInstance<any, any> | null>(null);
+  const focusNode = useCallback((nodeId: string) => {
+    const node = nodes.find(item => item.id === nodeId);
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null);
+    if (node && flowInstance.current) {
+      const width = node.measured?.width ?? 120, height = node.measured?.height ?? 90;
+      flowInstance.current.setCenter(node.position.x + width / 2, node.position.y + height / 2, { zoom: Math.max(flowInstance.current.getZoom(), 1), duration: 300 });
+    }
+  }, [nodes, setSelectedNodeId, setSelectedEdgeId]);
   const membershipFrames = asgMembershipFrames(visibleNodes);
   const displayedFrames = membershipFrames.map(node => hiddenLayers.has(canvasLayerKey(node)) ? { ...node, hidden: true } : node);
   const visibleEdges = edges.map(edge => ({
@@ -218,7 +236,7 @@ export const ArchitectureCanvas: React.FC = () => {
   }, [setSelectedNodeId, setSelectedEdgeId]);
 
   return (
-    <div className={`lab-canvas relative w-full h-full flex-1 overflow-hidden select-none ${dark ? 'bg-[#0f1720]' : 'bg-white'}`} ref={reactFlowWrapper}>
+    <div className={`lab-canvas relative w-full h-full flex-1 overflow-hidden select-none ${isConnecting ? 'is-connecting' : ''} ${dark ? 'bg-[#0f1720]' : 'bg-white'}`} ref={reactFlowWrapper}>
       <ReactFlow
         key={canvasRevision}
         nodes={[...visibleNodes, ...displayedFrames]}
@@ -227,6 +245,10 @@ export const ArchitectureCanvas: React.FC = () => {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onReconnect={onReconnect}
+        onConnectStart={() => setIsConnecting(true)}
+        onConnectEnd={() => setIsConnecting(false)}
+        onReconnectStart={() => setIsConnecting(true)}
+        onReconnectEnd={() => setIsConnecting(false)}
         connectionMode={ConnectionMode.Loose}
         edgesReconnectable
         reconnectRadius={14}
@@ -241,6 +263,7 @@ export const ArchitectureCanvas: React.FC = () => {
         onPaneClick={onPaneClick}
         defaultViewport={draftViewport ?? undefined}
         onMoveEnd={(_, viewport) => setDraftViewport(viewport)}
+        onInit={instance => { flowInstance.current = instance; }}
         fitView={!draftViewport}
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.2}
@@ -266,73 +289,41 @@ export const ArchitectureCanvas: React.FC = () => {
           color={dark ? '#2A3646' : '#E2E8F0'}
         />
 
-        {/* Clean Controls */}
-        {selectedEdge && (
-          <Panel position="bottom-center" className="pointer-events-none">
-            <div role="status" className="rounded-lg border border-circuit-300 bg-white/95 px-4 py-2 text-xs text-slate-700 shadow-md dark:border-slate-600 dark:bg-slate-900/95 dark:text-slate-200">
-              Drag either highlighted end onto a connection dot to move it to another side or component.
-            </div>
-          </Panel>
-        )}
         <Controls
           className="!bg-white !border !border-slate-200 !rounded-lg !shadow-md !overflow-hidden [&>button]:!bg-white [&>button]:!border-b [&>button]:!border-slate-100 [&>button]:!text-slate-600 [&>button:hover]:!bg-slate-50 dark:!bg-slate-900 dark:!border-slate-700 dark:[&>button]:!bg-slate-900 dark:[&>button]:!border-slate-800 dark:[&>button]:!text-slate-300 dark:[&>button]:!fill-slate-300 dark:[&>button:hover]:!bg-slate-800"
           showInteractive={false}
         />
 
 
-        {/* Canvas Task Flow Toggle */}
         <Panel position="top-left" className="m-3 flex items-center gap-2">
           <ReferenceLibrary />
           <SaveLabDiagram key={canvasRevision} />
-          {/* Quick Flow of Task Toggle */}
-          <button
-            onClick={toggleTaskFlow}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium shadow-xs transition-all cursor-pointer backdrop-blur-sm ${
-              highlightTaskFlow
-                ? 'bg-white/95 border-circuit-400 text-circuit-700 ring-2 ring-circuit-500/10 dark:bg-slate-900/95 dark:text-circuit-300'
-                : 'bg-white/80 border-slate-200 text-slate-600 hover:bg-white dark:bg-slate-900/80 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900'
-            }`}
-            title={highlightTaskFlow ? 'Task flow line highlights enabled (click to disable)' : 'Click to highlight task flow lines'}
-          >
-            <Route className="w-3.5 h-3.5 text-circuit-600" />
-            <span>Task Flow</span>
-            <span className={`w-1.5 h-1.5 rounded-full ${highlightTaskFlow ? 'bg-circuit-600 animate-pulse' : 'bg-slate-300'}`} />
-          </button>
-
           {/* Quick NACL Rules & Signals Side Column Toggle */}
           {hasCustomNacl && (
             <button
               onClick={() => setShowNaclSideColumn(!showNaclSideColumn)}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold shadow-xs transition-all cursor-pointer backdrop-blur-sm ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium shadow-xs transition-colors cursor-pointer ${
                 showNaclSideColumn
-                  ? 'bg-circuit-600 text-white border-circuit-600 ring-2 ring-circuit-400/30'
+                  ? 'bg-circuit-600 text-white border-circuit-600'
                   : 'bg-white/95 border-slate-200 text-slate-700 hover:bg-white hover:border-circuit-300 dark:bg-slate-900/95 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900'
               }`}
-              title="Open NACL Details & Signal Monitor in Side Column"
+              title="Show NACL rules"
             >
               <Shield className="w-3.5 h-3.5" />
-              <span>NACL Details</span>
-              <span className={`w-1.5 h-1.5 rounded-full ${showNaclSideColumn ? 'bg-white' : 'bg-circuit-500 animate-pulse'}`} />
+              <span>NACL rules</span>
             </button>
           )}
         </Panel>
 
+        {strayComponents.length > 0 && (
+          <Panel position="top-center" className="m-3">
+            <StrayNotice items={strayComponents} onFocus={focusNode} />
+          </Panel>
+        )}
+
         <Panel position="top-right" className="m-3">
           <CanvasLayers nodes={[...nodes, ...membershipFrames]} hidden={hiddenLayers} onChange={setHiddenLayers} />
         </Panel>
-
-        {/* Architectural Title Banner (from Problem 3.1) - only for the actual missing-return-rule
-            condition Problem 3.1 diagnoses, not for every custom NACL (e.g. the "Enable NACL rule
-            set" preset, which defaults to a complete rule set with no missing return). */}
-        {hasMissingReturnNacl && (
-          <Panel position="top-center" className="m-3">
-            <div className="px-4 py-1.5 rounded-xl bg-white/95 border border-slate-300 shadow-sm backdrop-blur-sm pointer-events-none text-center dark:bg-slate-900/95 dark:border-slate-700">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-wide font-sans">
-                Architectural Diagram addressing problem 3.1: Cause of connection timeout due to custom NACLs
-              </span>
-            </div>
-          </Panel>
-        )}
 
       </ReactFlow>
 

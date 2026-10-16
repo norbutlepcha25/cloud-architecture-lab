@@ -111,3 +111,13 @@ to say exactly this, rather than silently implying more precision than actually 
 engine in the live UI would mean changing what `runSimulation()`'s call sites receive their data
 from - a one-function-signature swap - not a UI redesign; this phase stops short of making that
 swap itself (§0), but the bridge it would go through already exists and is verified.
+
+## Shared live execution increment (2026-10-16)
+
+Product request paths, including the redundancy experiment, use runLiveSimulation.
+The live traversal delegates route/configured-inbound-firewall/IAM checks to
+simulation/applicationHop.ts with caller-provided evidence sinks. Supported
+DynamoDB child failures no longer overwrite the parent verdict when optional.
+The standalone unified pipeline remains diagnostic; this is not its migration
+into the product. Result kinds/outcomes and deterministic defaults are documented
+in target-architecture/SERVICE_CONSISTENCY_PROGRESS.md.

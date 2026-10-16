@@ -1,3 +1,4 @@
+import { track } from '../../analytics/analytics.ts';
 import { Download, Upload, HardDrive } from 'lucide-react';
 import { saveJsonFile } from '../../utils/saveJson.ts';
 import React, { useRef, useState } from 'react';
@@ -16,7 +17,7 @@ export function DraftControls() {
     try {
       const filename = draftFilename(draftName);
       const text = exportDraft();
-      if (await saveJsonFile(text, filename, location === 'choose')) setMessage(`Saved ${filename}.`);
+      if (await saveJsonFile(text, filename, location === 'choose')) { track('diagram_saved', { format: 'draft' }); setMessage(`Saved ${filename}.`); }
     } catch (error) {
       if ((error as Error)?.name !== 'AbortError') setMessage(error instanceof Error ? error.message : 'Could not save draft.');
     } finally { setSaving(false); }
