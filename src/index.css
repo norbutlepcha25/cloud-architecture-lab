@@ -183,3 +183,12 @@ html.lab-dark .react-flow {
 }
 /* Client/actor glyphs are drawn as dark outlines; lighten them so they stay visible. */
 html.lab-dark [stroke="#232F3E"] { stroke: #E2E8F0; }
+
+/* Overlay readability: inside dialogs every small text size steps up one notch. */
+.overlay-text { font-size: 0.9375rem; }
+.overlay-text .text-\[9px\] { font-size: 11px; line-height: 1rem; }
+.overlay-text .text-\[10px\] { font-size: 12px; line-height: 1.125rem; }
+.overlay-text .text-\[11px\] { font-size: 13px; line-height: 1.25rem; }
+.overlay-text .text-xs { font-size: 0.875rem; line-height: 1.375rem; }
+.overlay-text .text-sm { font-size: 0.9375rem; line-height: 1.5rem; }
+.overlay-text .text-base { font-size: 1.0625rem; line-height: 1.625rem; }

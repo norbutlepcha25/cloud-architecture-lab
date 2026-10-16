@@ -5,7 +5,7 @@
   "expected": "SUCCESS: the enrolment request reaches the private ECS tasks.",
   "nodes": [
     {
-      "id": "box-vpc",
+      "id": "lab-vpc",
       "type": "boundaryNode",
       "position": {
         "x": -2,
@@ -90,7 +90,10 @@
         "width": 660,
         "height": 230,
         "isSimulating": false,
-        "simulationStatus": "idle"
+        "simulationStatus": "idle",
+        "networkIdentity": {
+          "routeTableId": "node-public-rt"
+        }
       },
       "style": {
         "width": 660,
@@ -159,7 +162,10 @@
         "width": 660,
         "height": 230,
         "isSimulating": false,
-        "simulationStatus": "idle"
+        "simulationStatus": "idle",
+        "networkIdentity": {
+          "routeTableId": "node-public-rt"
+        }
       },
       "style": {
         "width": 660,
@@ -228,7 +234,10 @@
         "width": 660,
         "height": 320,
         "isSimulating": false,
-        "simulationStatus": "idle"
+        "simulationStatus": "idle",
+        "networkIdentity": {
+          "routeTableId": "node-private-rt"
+        }
       },
       "style": {
         "width": 660,
@@ -297,7 +306,10 @@
         "width": 660,
         "height": 320,
         "isSimulating": false,
-        "simulationStatus": "idle"
+        "simulationStatus": "idle",
+        "networkIdentity": {
+          "routeTableId": "node-private-rt"
+        }
       },
       "style": {
         "width": 660,
@@ -877,7 +889,26 @@
         "height": 98,
         "isSimulating": false,
         "simulationStatus": "idle",
-        "notes": "Associated with usms-public-subnet-a and -b. 0.0.0.0/0 -> usms-igw."
+        "notes": "Associated with usms-public-subnet-a and -b. 0.0.0.0/0 -> usms-igw.",
+        "customConfig": {
+          "routeTable": {
+            "routes": [
+              {
+                "destinationCidr": "10.0.0.0/16",
+                "target": {
+                  "type": "local"
+                }
+              },
+              {
+                "destinationCidr": "0.0.0.0/0",
+                "target": {
+                  "type": "igw",
+                  "targetId": "node-igw"
+                }
+              }
+            ]
+          }
+        }
       },
       "zIndex": 10,
       "measured": {
@@ -911,7 +942,26 @@
         "height": 98,
         "isSimulating": false,
         "simulationStatus": "idle",
-        "notes": "Associated with usms-private-subnet-a and -b. 0.0.0.0/0 -> usms-nat; S3 prefix list -> usms-s3-endpoint. No IGW route."
+        "notes": "Associated with usms-private-subnet-a and -b. 0.0.0.0/0 -> usms-nat; S3 prefix list -> usms-s3-endpoint. No IGW route.",
+        "customConfig": {
+          "routeTable": {
+            "routes": [
+              {
+                "destinationCidr": "10.0.0.0/16",
+                "target": {
+                  "type": "local"
+                }
+              },
+              {
+                "destinationCidr": "0.0.0.0/0",
+                "target": {
+                  "type": "nat",
+                  "targetId": "node-nat"
+                }
+              }
+            ]
+          }
+        }
       },
       "zIndex": 10,
       "measured": {
@@ -949,7 +999,10 @@
           "type": "Gateway",
           "service": "com.amazonaws.us-east-1.s3",
           "routeTable": "usms-private-rt",
-          "createdIn": "Lab 02"
+          "createdIn": "Lab 02",
+          "routeTableIds": [
+            "node-private-rt"
+          ]
         }
       },
       "zIndex": 10,
@@ -1490,6 +1543,23 @@
         "isFailing": false,
         "flowStatus": "dimmed",
         "description": "Uses usms-ecs-exec-role (pull/logs) and usms-ecs-task-role (app)"
+      }
+    },
+    {
+      "id": "edge-node-web-01-node-db-01",
+      "source": "node-web-01",
+      "target": "node-db-01",
+      "type": "custom",
+      "data": {
+        "relationship": "dependency",
+        "traversal": "dependency",
+        "protocol": "SQL",
+        "destinationPort": 5432,
+        "interactionType": "synchronous",
+        "isCriticalDependency": false,
+        "dependencyRequired": false,
+        "timeoutMs": 2500,
+        "description": "tcp/5432 allowed by usms-db-sg, source = usms-app-sg (web tier reads the database)"
       }
     }
   ],

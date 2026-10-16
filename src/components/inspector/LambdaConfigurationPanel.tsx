@@ -63,6 +63,21 @@ export function LambdaConfigurationPanel({ data: nodeData, onChange }: { data: S
           className="w-full accent-circuit-600"
         />
       </div>
+
+      <label className="block text-xs font-semibold text-slate-700">Timeout (seconds)
+        <input type="number" min={1} max={900} className="mt-1 block w-full rounded border border-slate-300 bg-white px-2 py-1"
+          value={nodeData.customConfig?.timeoutSeconds ?? 3}
+          onChange={(e) => onChange({ customConfig: { ...nodeData.customConfig, timeoutSeconds: Number(e.target.value) } } as any)} />
+        <span className="block font-normal text-slate-500 mt-1">Default 3 s, maximum 900 s. As an SQS consumer it must not exceed the queue's visibility timeout.</span>
+      </label>
+
+      <label className="block text-xs font-semibold text-slate-700">Simulated processing result
+        <select className="mt-1 block w-full rounded border border-slate-300 bg-white px-2 py-1"
+          value={nodeData.customConfig?.processingResult ?? 'SUCCEEDED'}
+          onChange={(e) => onChange({ customConfig: { ...nodeData.customConfig, processingResult: e.target.value } } as any)}>
+          <option value="SUCCEEDED">Function succeeds</option><option value="FAILED">Function returns an error</option>
+        </select>
+      </label>
     </div>
   );
 }

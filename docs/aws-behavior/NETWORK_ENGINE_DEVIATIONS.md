@@ -28,18 +28,25 @@ has no such model - canvas nodes are positioned freely, not assigned addresses. 
   app models (HTTPS→443, HTTP→80, SQL→3306, DNS→53, gRPC→443) but not a substitute for a real port
   scanner or per-node service-port configuration.
 
-## 2. Route Tables are a real, tested engine - not yet load-bearing in the live trace
+## 2. Route tables are load-bearing for internet, NAT and gateway endpoint paths (2026-10-17)
 
-`routeTable.ts`'s `resolveRoute()` implements genuine longest-prefix-match route resolution,
-fully unit-tested (N5-N9) including public/private/default/missing-route/malformed-destination
-cases. However, **no existing reference architecture authors a `RouteTable`** - there is no canvas
-UI yet for a student to draw one, and none of the current templates would benefit from one without
-that UI. Per `docs/target-architecture/NETWORK_ENGINE.md` §4 and `MIGRATION_PLAN.md` Phase 4, this
-module is deliberately reserved as ready-to-adopt infrastructure rather than force-wired into
-`networkPathAdapter`'s existing (and already-tested) subnet-membership heuristic for IGW/NAT
-reachability. Wiring it live requires a product decision (how would a student author routes on the
-canvas?) that is out of scope for this pass - see `MIGRATION_PLAN.md`'s own explicit gating of
-Phase 4 on a fresh scoping conversation.
+Superseded: subnets associated with a route table node now decide internet ingress, NAT/IGW
+egress and gateway endpoint use live (`engine/network/subnetRouting.ts`, spec
+[docs/behavior/route_tables.md](../behavior/route_tables.md)). Remaining deviations:
+
+- Unassociated subnets: "Assume route tables" on generates standard public/private tables (a
+  simulator convenience, not AWS's main-table behavior); off gives the AWS main table of a new VPC
+  (local route only). Resources outside any subnet or VPC keep legacy placement checks.
+- "The internet" is a fixed documentation address (203.0.113.10). Routes scoped to specific
+  public ranges are matched against that address only.
+- Public IPv4 assignment is assumed for resources in a subnet routed to an internet gateway.
+- IGW attachment defaults to the VPC it is inside or touches (else the only VPC); the panel can name a VPC or mark it not attached. AWS refuses to detach while public IPs exist; the simulator does not.
+- IGW failure is a teaching scenario; AWS documents internet gateways as highly available.
+- Invalid routes (other-VPC targets, duplicates) are reported by validation instead of being refused at edit time.
+- Explicit private-IPv4 routing (`liveRouting.ts`) still evaluates local routes only and runs
+  only when the destination has an explicit private IP.
+- IPv6, egress-only gateways, peering, transit gateways and virtual private gateways are not
+  simulated as transit.
 
 ## 3. Single-account, single-region model
 

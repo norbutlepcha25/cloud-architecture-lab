@@ -40,7 +40,10 @@
         "width": 440,
         "height": 260,
         "cidr": "10.0.1.0/24",
-        "az": "AZ-A"
+        "az": "AZ-A",
+        "networkIdentity": {
+          "routeTableId": "lab-public-rt"
+        }
       }
     },
     {
@@ -60,7 +63,10 @@
         "width": 440,
         "height": 260,
         "cidr": "10.0.2.0/24",
-        "az": "AZ-B"
+        "az": "AZ-B",
+        "networkIdentity": {
+          "routeTableId": "lab-public-rt"
+        }
       }
     },
     {
@@ -80,7 +86,10 @@
         "width": 440,
         "height": 320,
         "cidr": "10.0.3.0/24",
-        "az": "AZ-A"
+        "az": "AZ-A",
+        "networkIdentity": {
+          "routeTableId": "lab-private-rt"
+        }
       }
     },
     {
@@ -100,7 +109,10 @@
         "width": 440,
         "height": 320,
         "cidr": "10.0.4.0/24",
-        "az": "AZ-B"
+        "az": "AZ-B",
+        "networkIdentity": {
+          "routeTableId": "lab-private-rt"
+        }
       }
     },
     {
@@ -118,7 +130,12 @@
         "az": "Edge / Global",
         "subnet": "global",
         "replicas": 1,
-        "multiAz": false
+        "multiAz": false,
+        "customConfig": {
+          "routeTableIds": [
+            "lab-private-rt"
+          ]
+        }
       }
     },
     {
@@ -191,7 +208,26 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": false,
-        "notes": "Reference association: public subnets; default route to usms-igw. Live route-table selection is approximated."
+        "notes": "Reference association: public subnets; default route to usms-igw. Live route-table selection is approximated.",
+        "customConfig": {
+          "routeTable": {
+            "routes": [
+              {
+                "destinationCidr": "10.0.0.0/16",
+                "target": {
+                  "type": "local"
+                }
+              },
+              {
+                "destinationCidr": "0.0.0.0/0",
+                "target": {
+                  "type": "igw",
+                  "targetId": "lab-igw"
+                }
+              }
+            ]
+          }
+        }
       }
     },
     {
@@ -210,7 +246,26 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": false,
-        "notes": "Reference association: private subnets; default route to usms-nat; S3 endpoint route."
+        "notes": "Reference association: private subnets; default route to usms-nat; S3 endpoint route.",
+        "customConfig": {
+          "routeTable": {
+            "routes": [
+              {
+                "destinationCidr": "10.0.0.0/16",
+                "target": {
+                  "type": "local"
+                }
+              },
+              {
+                "destinationCidr": "0.0.0.0/0",
+                "target": {
+                  "type": "nat",
+                  "targetId": "lab-nat"
+                }
+              }
+            ]
+          }
+        }
       }
     },
     {

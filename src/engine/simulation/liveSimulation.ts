@@ -4,12 +4,18 @@ import type { ServiceNodeData, ConnectionData, SimulationScenario, SimulationRes
 import type { RequestTrace } from '../trace/types.ts';
 import { runSimulation } from './requestSimulator.ts';
 import { resultEvidence } from './resultEvidence.ts';
+import { pipelinesTriggeredBy, runPipelineExecution } from '../cicd/pipeline.ts';
 
 /** The UI executes this entry point. Explanations are immutable run evidence, never a second run. */
 export function runLiveSimulation(nodes: Node<ServiceNodeData>[], edges: Edge<ConnectionData>[], scenario: SimulationScenario): SimulationResult {
   // Explicit step numbers still define workload priority. IDs break otherwise ambiguous ties;
   // canvas insertion order and JSON serialization order must not select a different path.
   const byId = (a: { id: string }, b: { id: string }) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  // A pipeline (or a push to a source that triggers one) runs as a CI/CD workflow, not a request.
+  const start = nodes.find(node => node.id === scenario.startNodeId);
+  const pipeline = start?.data.serviceId === 'codepipeline' ? start
+    : start && ['codecommit', 'ecr_registry'].includes(start.data.serviceId) ? pipelinesTriggeredBy(start, nodes, edges).sort(byId)[0] : undefined;
+  if (pipeline) return structuredClone(runPipelineExecution(pipeline, [...nodes].sort(byId), [...edges].sort(byId), scenario));
   const result = runSimulation([...nodes].sort(byId), [...edges].sort(byId), scenario, { enforceIam: true });
   Object.assign(result, resultEvidence(result));
   if (edges.some(edge => isDependencyCall(edge.data))) {

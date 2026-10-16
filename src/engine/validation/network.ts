@@ -4,6 +4,7 @@ import { makeFinding, type Finding } from '../findings.ts';
 import { SUBNET_REQUIRED_SERVICE_IDS } from '../layout/containment.ts';
 import { validateNatGatewayPlacement } from '../network/nat.ts';
 import { requestEdges } from '../failure/dependencyGraph.ts';
+import { isIgwDetached, routingConfigurationIssues } from '../network/subnetRouting.ts';
 
 const VPC_HOSTED_INGRESS_SERVICE_IDS = ['alb', 'nlb', 'ec2', 'ecs', 'fargate', 'api_gateway'];
 const ENDPOINT_SERVICE_IDS = ['privatelink', 's3_gateway_endpoint'];
@@ -59,14 +60,14 @@ export function validateNetwork(
   const hasPublicIngressResource = serviceNodes.some(n =>
     n.data.subnet === 'public' && VPC_HOSTED_INGRESS_SERVICE_IDS.includes(n.data.serviceId)
   );
-  const hasIgw = serviceNodes.some(n => n.data.serviceId === 'internet_gateway');
+  const hasIgw = serviceNodes.some(n => n.data.serviceId === 'internet_gateway' && !isIgwDetached(n));
   if (hasPublicIngressResource && !hasIgw) {
     const example = serviceNodes.find(n => n.data.subnet === 'public' && VPC_HOSTED_INGRESS_SERVICE_IDS.includes(n.data.serviceId))!;
     findings.push(makeFinding('validation', 'routing', {
       severity: 'CRITICAL',
       resource: example.data.label,
       resourceId: example.id,
-      problem: `${example.data.label} sits in a public subnet, but no Internet Gateway exists anywhere in the VPC.`,
+      problem: `${example.data.label} sits in a public subnet, but no attached Internet Gateway exists in the VPC.`,
       whyItMatters: 'Without an Internet Gateway, a public route table has no target for a 0.0.0.0/0 route - the VPC has no path to or from the internet at all, regardless of subnet placement or Security Group rules.',
       awsRule: 'A public subnet is only "public" because its route table sends 0.0.0.0/0 to an attached Internet Gateway - the subnet designation alone grants no connectivity.',
       recommendation: 'Add an Internet Gateway and attach it to the VPC.'
@@ -101,5 +102,16 @@ export function validateNetwork(
     }
   }
 
+
+  // Route table and internet gateway configuration that AWS rejects or forbids.
+  for (const issue of routingConfigurationIssues(nodes)) {
+    findings.push(makeFinding('validation', 'routing', {
+      severity: 'HIGH', resource: issue.label, resourceId: issue.nodeId,
+      problem: issue.problem,
+      whyItMatters: 'AWS would refuse this configuration, so the simulated route may not exist in a real VPC.',
+      awsRule: issue.awsRule,
+      recommendation: issue.recommendation
+    }));
+  }
   return findings;
 }

@@ -46,7 +46,7 @@ export const SimulationControls: React.FC = () => {
   return (
     <div className="bg-white border-t border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-4 z-10 select-none">
       {/* Left: Request Parameters */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {!checkOnly && <div className="flex items-center gap-1.5 font-mono text-xs">
           {/* HTTP Method */}
           <select
@@ -89,11 +89,17 @@ export const SimulationControls: React.FC = () => {
         {/* Run Request Button */}
         <button
           onClick={runScenario}
-          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#232F3E] hover:bg-[#1A232E] text-white font-medium text-xs transition-colors"
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#232F3E] hover:bg-[#1A232E] text-white font-medium text-xs whitespace-nowrap transition-colors"
         >
           <Send className="w-3.5 h-3.5" />
           <span>{configurationOnly ? 'Check Configuration' : policyOnly ? 'Evaluate Policy' : 'Send Request'}</span>
         </button>
+
+        {!checkOnly && <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer whitespace-nowrap" title="On: subnets without a route table behave like a standard public/private setup. Off: they only get the VPC local route, so you must configure route tables.">
+          <input type="checkbox" checked={scenario.assumeRouteTables !== false}
+            onChange={e => setScenario(prev => ({ ...prev, assumeRouteTables: e.target.checked }))} />
+          Assume route tables
+        </label>}
 
         {/* Task Flow Highlighting Toggle */}
         <button

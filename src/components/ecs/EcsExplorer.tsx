@@ -64,7 +64,7 @@ export function EcsExplorer({ nodeId, nodes, edges, onUpdate, onClose }: {
   const titles: Record<EcsSection, string> = { cluster: 'Cluster', service: 'Service configuration', definition: 'Task definition', tasks: 'Task snapshot', compute: 'Compute capacity', network: 'Networking & connections', container: 'Container configuration' };
   return createPortal(<div className="fixed inset-0 z-[11000] bg-slate-950/40 p-2 sm:p-4 flex items-center justify-center" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
     <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="ecs-explorer-title" tabIndex={-1}
-      className="w-full max-w-7xl h-[92dvh] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none"
+      className="overlay-text w-full max-w-7xl h-[92dvh] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none"
       onKeyDown={e => {
         e.stopPropagation();
         if (e.key === 'Escape') { e.preventDefault(); onClose(); }

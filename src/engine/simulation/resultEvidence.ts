@@ -10,6 +10,7 @@ export function resultEvidence(result: SimulationResult): { kind: SimulationResu
 
 export function resultLabel(result: SimulationResult): string {
   const { kind, outcome } = resultEvidence(result);
+  if (kind === 'workflow') return `Pipeline ${outcome === 'success' ? 'SUCCEEDED' : 'FAILED'}`;
   if (kind !== 'request') return `${kind === 'configuration-check' ? 'Configuration' : 'Policy'} ${outcome === 'success' ? 'PASS' : 'FAIL'}`;
   return outcome === 'unsupported' ? 'Behavior not modeled' : `HTTP ${result.statusCode}`;
 }

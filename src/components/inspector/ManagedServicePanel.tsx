@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useArchitecture } from '../../context/ArchitectureContext.tsx';
 import { operate, type Operation, type Runtime } from '../../engine/services/operations.ts';
+import { DEFAULT_MAX_RECEIVE_COUNT, queueConsumers, queueSettings, sqsConfigurationIssues, SQS_LIMITS } from '../../engine/messaging/sqs.ts';
 export function ManagedServicePanel() {
   const { selectedNode, nodes, effectiveNodes, edges, setNodes, updateNodeData } = useArchitecture();
   const [body, setBody] = useState('Hello from the simulator');
@@ -29,7 +30,7 @@ export function ManagedServicePanel() {
     <p>Deterministic service experiment. Inspector actions are administrative simulations, not IAM-authorized application calls.</p>
     {['sqs', 'sns'].includes(node.data.serviceId) && <label className="block">Message<input className="block border p-1 w-full" value={body} onChange={e => setBody(e.target.value)} /></label>}
     {node.data.serviceId === 'sqs' && <>
-      <label className="block">Visibility timeout (seconds)<input type="number" min={0} max={43200} value={config.visibilityTimeoutSeconds ?? 30} onChange={e => update({ visibilityTimeoutSeconds: Number(e.target.value) })} /></label>
+      <QueueSettings nodeId={node.id} nodes={nodes} edges={edges} config={config} update={update} />
       <p>Allowed SNS topics (simplified queue policy):</p>
       {nodes.filter(n => n.data.serviceId === 'sns').map(topic => <label className="block" key={topic.id}><input type="checkbox" checked={(config.allowedTopicIds ?? []).includes(topic.id)} onChange={e => update({ allowedTopicIds: e.target.checked ? [...(config.allowedTopicIds ?? []), topic.id] : (config.allowedTopicIds ?? []).filter((id: string) => id !== topic.id) })} />{topic.data.label}</label>)}
       <div className="flex flex-wrap gap-2">{button('send', 'Send')}{button('receive', 'Receive')}{button('advance', 'Advance 30 seconds')}</div>
@@ -57,4 +58,38 @@ export function ManagedServicePanel() {
     <div role="status">{state?.trace.map((line, i) => <p key={i}>{line}</p>)}</div>
     {!!state?.records.length && <details><summary>Recorded samples/events ({state.records.length})</summary><pre className="whitespace-pre-wrap break-all max-h-64 overflow-auto">{JSON.stringify(state.records, null, 2)}</pre></details>}
   </section>;
+}
+
+const numberField = 'ml-1 w-28 rounded border border-slate-300 px-1 py-0.5';
+
+/** Queue attributes that change simulated behavior (engine/messaging/sqs.ts). */
+function QueueSettings({ nodeId, nodes, edges, config, update }: {
+  nodeId: string; nodes: any[]; edges: any[]; config: Record<string, any>; update: (patch: Record<string, unknown>) => void;
+}) {
+  const queue = nodes.find(n => n.id === nodeId)!;
+  const settings = queueSettings(queue, nodes, edges);
+  const issues = sqsConfigurationIssues(nodes, edges).filter(i => i.nodeId === nodeId);
+  const consumers = queueConsumers(queue, nodes, edges);
+  const queues = nodes.filter(n => ['sqs', 'sqs_dlq'].includes(n.data.serviceId) && n.id !== nodeId);
+  const field = (name: string, key: string, value: number, limits: { min: number; max: number }) =>
+    <label className="block">{name}<input type="number" min={limits.min} max={limits.max} className={numberField} value={value} onChange={e => update({ [key]: Number(e.target.value) })} /></label>;
+  return <div className="space-y-1.5">
+    {field('Visibility timeout (s)', 'visibilityTimeoutSeconds', settings.visibility, SQS_LIMITS.visibility)}
+    {field('Message retention (s)', 'messageRetentionSeconds', settings.retention, SQS_LIMITS.retention)}
+    {field('Delivery delay (s)', 'delaySeconds', settings.delay, SQS_LIMITS.delay)}
+    <label className="block">Simulated message size (bytes)<input type="number" min={1} className={numberField} value={config.messageSizeBytes ?? 1024} onChange={e => update({ messageSizeBytes: Number(e.target.value) })} /></label>
+    <label className="block">Dead-letter queue
+      <select className="ml-1 rounded border border-slate-300 px-1 py-0.5" value={settings.dlq?.id ?? ''} onChange={e => update({ redrivePolicy: e.target.value ? { deadLetterTargetId: e.target.value, maxReceiveCount: settings.maxReceiveCount ?? DEFAULT_MAX_RECEIVE_COUNT } : undefined })}>
+        <option value="">None</option>{queues.map(q => <option key={q.id} value={q.id}>{q.data.label}</option>)}
+      </select>
+    </label>
+    {settings.dlq && <label className="block">maxReceiveCount<input type="number" min={1} className={numberField} value={settings.maxReceiveCount} onChange={e => update({ redrivePolicy: { deadLetterTargetId: settings.dlq!.id, maxReceiveCount: Number(e.target.value) } })} /></label>}
+    <label className="block">Encryption key (SSE-KMS)
+      <select className="ml-1 rounded border border-slate-300 px-1 py-0.5" value={config.kmsKeyId ?? ''} onChange={e => update({ kmsKeyId: e.target.value || undefined })}>
+        <option value="">SSE-SQS (managed)</option>{nodes.filter(n => n.data.serviceId === 'kms').map(k => <option key={k.id} value={k.id}>{k.data.label}</option>)}
+      </select>
+    </label>
+    <p className="text-slate-500">Consumers: {consumers.length ? consumers.map(c => c.data.label).join(', ') : 'none connected (connect this queue to Lambda, EC2 or ECS)'}.</p>
+    {issues.map(i => <p key={i.problem} role="alert" className="text-rose-700">{i.problem} {i.rule}</p>)}
+  </div>;
 }

@@ -39,6 +39,10 @@ export const LIVE_ADAPTER_SERVICE_IDS = [
  * entry names the test(s) that back it.
  */
 export const REQUEST_SIMULATION_EVIDENCE: Record<string, string> = {
+  codepipeline: 'tests/aws-conformance/devtools/cicd.test.ts CP-RUN-001, CP-STOP-001, CP-IAM-001 - pipeline execution (workflow result, engine/cicd/pipeline.ts)',
+  codecommit: 'tests/aws-conformance/devtools/cicd.test.ts CP-RUN-001 - push starts the connected pipeline (source action)',
+  codebuild: 'tests/aws-conformance/devtools/cicd.test.ts CB-DOCKER-001, CB-VPC-001 - build action within a pipeline execution',
+  codedeploy: 'tests/aws-conformance/devtools/cicd.test.ts CD-CONFIG-001, CD-LIVE-001, CD-AGENT-001, CD-ECS-NLB-001 - deployment action within a pipeline execution',
   cloudwatch: 'test/managed-services.test.ts: live single-period alarm evaluation',
   cloudtrail: 'test/managed-services.test.ts: live audit event selection',
   sns: 'test/managed-services.test.ts: live SNS fanout to permitted queues',
@@ -53,7 +57,7 @@ export const REQUEST_SIMULATION_EVIDENCE: Record<string, string> = {
   rds: 'test/engine.test.ts (tests 2-3); tests/aws-conformance/database/rds.test.ts SVC-RDS-SUCCESS-001',
   dynamodb: 'tests/aws-conformance/database/dynamodb.test.ts SVC-DDB-SUCCESS-001; test/dependency-workflow.test.ts bounded live child calls (item data and reverse packets unmodeled)',
   s3: 'tests/aws-conformance/storage/s3.test.ts SVC-S3-SUCCESS-001; networking/subnets-endpoints.test.ts NET-ENDPOINT-001',
-  sqs: 'tests/aws-conformance/messaging/messaging.test.ts SVC-SQS-SUCCESS-001',
+  sqs: 'tests/aws-conformance/messaging/messaging.test.ts SVC-SQS-SUCCESS-001; tests/aws-conformance/messaging/sqs.test.ts SQS-SEND-001, SQS-VPC-001, SQS-ESM-001/002, SQS-DLQ-001 (engine/messaging/sqs.ts)',
   cloudfront: 'tests/aws-conformance/dns/cloudfront.test.ts SVC-CF-CACHE-HIT-001, SVC-CF-CACHE-MISS-001',
   route53: 'tests/aws-conformance/dns/route53.test.ts SVC-R53-SUCCESS-001',
   nat_gateway: 'test/engine.test.ts; test/failure-engine.test.ts; tests/aws-conformance/networking/routing.test.ts NET-NAT-001/002',
@@ -74,6 +78,7 @@ export const REQUEST_SIMULATION_EVIDENCE: Record<string, string> = {
  * `engine/failure/propagation.ts`. That generic mechanism alone does not earn this flag.
  */
 export const FAILURE_SIMULATION_EVIDENCE: Record<string, string> = {
+  codedeploy: 'tests/aws-conformance/devtools/cicd.test.ts CD-LIVE-001 - failed target instances count against the deployment configuration',
   ec2: 'tests/aws-conformance/compute/ec2.test.ts SVC-EC2-SERVICE-FAILURE-001 (503, no failover in front of it)',
   fargate: 'tests/aws-conformance/compute/fargate.test.ts SVC-FARGATE-SERVICE-FAILURE-001',
   lambda: 'tests/aws-conformance/compute/lambda.test.ts SVC-LAMBDA-SERVICE-FAILURE-001',

@@ -163,7 +163,45 @@
         "subnet": "private",
         "replicas": 1,
         "multiAz": false,
-        "notes": "Serves the website; only reachable from the ALB."
+        "notes": "Serves the website; only reachable from the ALB.",
+        "iamRole": {
+          "id": "WebServerS3ReadRole",
+          "trustPolicy": {
+            "id": "WebServerS3ReadRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "principals": [
+                  "ec2.amazonaws.com"
+                ],
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [
+                  "*"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "WebServerS3ReadRolePolicy",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "s3:GetObject"
+                  ],
+                  "resources": [
+                    "arn:aws:s3:::website-storage/*"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -201,7 +239,10 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": true,
-        "notes": "Stores site assets, uploads, and backups."
+        "notes": "Stores site assets, uploads, and backups.",
+        "customConfig": {
+          "resourceArn": "arn:aws:s3:::website-storage"
+        }
       }
     }
   ],

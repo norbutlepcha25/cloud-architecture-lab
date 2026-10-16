@@ -4,6 +4,8 @@ import type { TraceEntry } from '../trace/types.ts';
 import { IAM_AUTHENTICATED_ACTIONS } from '../capability/iamCoverage.ts';
 import { evaluateAuthorization } from './evaluate.ts';
 import { assumeRole } from './roleAssumption.ts';
+import { normalizeTrustPolicy, servicePrincipalFor } from './servicePrincipals.ts';
+import { targetResourceArn } from './roleBuilder.ts';
 import type { Principal } from './types.ts';
 
 /** Shared application API authorization. Network/database connections need no IAM decision. */
@@ -40,9 +42,9 @@ export function authorizeApplicationHop(source: Node<ServiceNodeData>, target: N
     const role = source.data.iamRole;
     const rolePrincipal: Principal = {
       id: role.id, kind: 'role', accountId: '000000000000',
-      trustPolicy: source.data.serviceId === 'ec2' && role.trustPolicy ? { ...role.trustPolicy, statements: role.trustPolicy.statements.map(statement => ({ ...statement, principals: statement.principals?.map(principal => principal === 'ec2' ? 'ec2.amazonaws.com' : principal) })) } : role.trustPolicy, identityPolicies: role.identityPolicies || [], permissionsBoundary: role.permissionsBoundary
+      trustPolicy: normalizeTrustPolicy(role.trustPolicy, source.data.serviceId), identityPolicies: role.identityPolicies || [], permissionsBoundary: role.permissionsBoundary
     };
-    const callerPrincipal: Principal = { id: source.data.serviceId === 'ecs' ? 'ecs-tasks.amazonaws.com' : source.data.serviceId === 'ec2' ? 'ec2.amazonaws.com' : source.data.serviceId, kind: 'service', accountId: '000000000000', identityPolicies: [] };
+    const callerPrincipal: Principal = { id: servicePrincipalFor(source.data.serviceId), kind: 'service', accountId: '000000000000', identityPolicies: [] };
     const assumeResult = assumeRole(callerPrincipal, rolePrincipal);
 
     if (!assumeResult.allowed) {
@@ -59,8 +61,10 @@ export function authorizeApplicationHop(source: Node<ServiceNodeData>, target: N
         metadata: {}
       });
     } else {
-      let resourceArn = String(target.data.customConfig?.resourceArn || `arn:aws:${target.data.serviceId}:::${target.id}`);
-      if (source.data.serviceId === 'ec2' && target.data.serviceId === 's3' && ['s3:GetObject', 's3:PutObject'].includes(iamAction) && !resourceArn.includes('/')) resourceArn += '/simulated-object';
+      let resourceArn = targetResourceArn(target);
+      // Object-level S3 actions are authorized against an object ARN (bucket/key), whoever calls.
+      // https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html
+      if (target.data.serviceId === 's3' && ['s3:GetObject', 's3:PutObject'].includes(iamAction) && !resourceArn.includes('/')) resourceArn += '/simulated-object';
       const decision = evaluateAuthorization({
         principal: assumeResult.sessionPrincipal!,
         action: iamAction,

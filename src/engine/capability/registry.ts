@@ -7,8 +7,9 @@ import { classify, type CapabilityFlag, type CapabilityStatus, type ServiceCapab
 
 /** Real AWS network primitives beyond the pure "must live in a customer subnet" list
  *  (`SUBNET_REQUIRED_SERVICE_IDS`) that still have a structurally-real, code-backed network
- *  behavior: NAT/IGW attachment checks and VPC Gateway/Interface Endpoint routing. */
-const NETWORK_BEHAVIOR_EXTRA_SERVICE_IDS = ['nat_gateway', 'internet_gateway', 's3_gateway_endpoint'];
+ *  behavior: NAT/IGW attachment checks, VPC Gateway/Interface Endpoint routing, and route-table
+ *  driven ingress/egress (engine/network/subnetRouting.ts; tests/aws-conformance/networking/route-tables-live.test.ts). */
+const NETWORK_BEHAVIOR_EXTRA_SERVICE_IDS = ['nat_gateway', 'internet_gateway', 's3_gateway_endpoint', 'route_tables'];
 
 /** Services this simulator has explicit, test-confirmed evidence that IAM genuinely does NOT
  *  govern (a database-credential connection, DNS resolution, ALB/NLB routing) - distinct from the
@@ -49,7 +50,9 @@ function buildProfile(service: (typeof AWS_SERVICES)[number]): ServiceCapability
   const networkEvidence = hasNetworkBehavior
     ? (SUBNET_REQUIRED_SERVICE_IDS.includes(service.id)
       ? 'engine/layout/containment.ts SUBNET_REQUIRED_SERVICE_IDS - real subnet-placement validation (engine/validation/network.ts) and NACL/SG evaluation on every hop into it.'
-      : 'engine/simulation/adapters/ - real NAT/IGW attachment or VPC endpoint routing logic keyed on this exact serviceId.')
+      : service.id === 'route_tables'
+        ? 'engine/network/subnetRouting.ts - associated route tables decide internet ingress, NAT/IGW egress and gateway endpoint use (tests/aws-conformance/networking/route-tables-live.test.ts).'
+        : 'engine/simulation/adapters/ - real NAT/IGW attachment or VPC endpoint routing logic keyed on this exact serviceId.')
     : 'Not asserted as VPC-subnet-relevant by this simulator (fully-managed/edge service, or not yet modeled - see registry.ts module note on this default).';
 
   const isConnected = LIVE_ADAPTER_SERVICE_IDS.includes(service.id);

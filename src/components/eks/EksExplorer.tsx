@@ -36,7 +36,7 @@ export function EksExplorer({ nodeId, nodes, edges, onUpdate, onClose }: {
   const titles = { cluster: 'Cluster & control plane', workload: 'Deployment & pod snapshot', service: 'Kubernetes Service', compute: 'Compute capacity', hpa: 'Horizontal Pod Autoscaler', container: 'Container blueprint' };
   const links = edges.filter(e => e.source === selected.id || e.target === selected.id);
   return createPortal(<div className="fixed inset-0 z-[11000] bg-slate-950/40 p-2 sm:p-4 flex justify-center items-center" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="eks-title" tabIndex={-1} className="w-full max-w-7xl h-[92dvh] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none" onKeyDown={e => {
+    <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="eks-title" tabIndex={-1} className="overlay-text w-full max-w-7xl h-[92dvh] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl outline-none" onKeyDown={e => {
       e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       if (e.key === 'Tab') {
         const items = dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]');

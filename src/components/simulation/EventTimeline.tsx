@@ -39,15 +39,18 @@ export const EventTimeline: React.FC = () => {
 
   return (
     <div className="bg-white border-t border-slate-200 flex flex-col shrink-0 max-h-52 select-none z-10 shadow-xs">
-      {/* Top Banner / Active Event Detail */}
-      <div className="px-4 py-1.5 border-b border-slate-100 bg-white flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      {/* Header: title only while minimized; step count and active step once expanded */}
+      <div
+        className={`px-4 py-1.5 bg-white flex items-center justify-between ${isCollapsed ? 'cursor-pointer hover:bg-slate-50' : 'border-b border-slate-100'}`}
+        onClick={isCollapsed ? () => setIsCollapsed(false) : undefined}
+      >
+        <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-semibold text-slate-800">Timeline</span>
-          <span className="text-[10px] text-slate-400 font-mono">{simulationResult.steps.length} steps</span>
+          {!isCollapsed && <span className="text-[10px] text-slate-400 font-mono">{simulationResult.steps.length} steps</span>}
         </div>
 
         {!isCollapsed && activeStep && (
-          <div className="text-xs text-slate-600 font-mono flex items-center gap-2">
+          <div className="text-xs text-slate-600 font-mono flex items-center gap-2 min-w-0">
             <span className="text-slate-900 font-semibold">{activeStep.targetNodeName}</span>
             <span className="text-slate-400">:</span>
             <span className="text-slate-700 truncate max-w-md">{activeStep.action}</span>
@@ -60,7 +63,8 @@ export const EventTimeline: React.FC = () => {
           aria-label={isCollapsed ? 'Expand timeline' : 'Minimize timeline'}
           title={isCollapsed ? 'Expand timeline' : 'Minimize timeline'}
           className="ml-3 shrink-0 rounded p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-circuit-600"
-          onClick={() => {
+          onClick={event => {
+            event.stopPropagation();
             setHoveredStepIndex(null);
             setIsCollapsed(value => !value);
           }}

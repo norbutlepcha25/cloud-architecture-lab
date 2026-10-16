@@ -1,0 +1,630 @@
+{
+  "id": "cicd-codepipeline-ec2",
+  "name": "CI/CD: CodeCommit → CodePipeline → CodeBuild → CodeDeploy",
+  "category": "CI/CD & Developer Tools",
+  "difficulty": "Intermediate",
+  "description": "A push to CodeCommit starts CodePipeline. CodeBuild runs the buildspec, and CodeDeploy rolls the revision out one instance at a time to two EC2 web servers in private subnets behind an ALB. Each service has its own least-privilege service role.",
+  "learningOutcome": "Select the repository and choose Push commit (or Run pipeline on the pipeline). Then break it: fail the build, uninstall the CodeDeploy agent on one instance, remove the NAT gateway route, or detach a service role, and see which stage stops and why.",
+  "nodes": [
+    {
+      "id": "box-vpc",
+      "type": "boundaryNode",
+      "position": {
+        "x": 200,
+        "y": 40
+      },
+      "data": {
+        "label": "Application VPC",
+        "boundaryType": "vpc",
+        "width": 940,
+        "height": 560,
+        "cidr": "10.0.0.0/16"
+      },
+      "style": {
+        "width": 940,
+        "height": 560
+      },
+      "draggable": false,
+      "selectable": true,
+      "zIndex": -2
+    },
+    {
+      "id": "box-public",
+      "type": "boundaryNode",
+      "position": {
+        "x": 220,
+        "y": 80
+      },
+      "data": {
+        "label": "Public subnet",
+        "boundaryType": "public_subnet",
+        "width": 900,
+        "height": 170,
+        "cidr": "10.0.0.0/24"
+      },
+      "style": {
+        "width": 900,
+        "height": 170
+      },
+      "draggable": false,
+      "selectable": true,
+      "zIndex": -1
+    },
+    {
+      "id": "box-private",
+      "type": "boundaryNode",
+      "position": {
+        "x": 220,
+        "y": 300
+      },
+      "data": {
+        "label": "Private subnet",
+        "boundaryType": "private_subnet",
+        "width": 900,
+        "height": 270,
+        "cidr": "10.0.1.0/24"
+      },
+      "style": {
+        "width": 900,
+        "height": 270
+      },
+      "draggable": false,
+      "selectable": true,
+      "zIndex": -1
+    },
+    {
+      "id": "node-user",
+      "type": "serviceNode",
+      "position": {
+        "x": 20,
+        "y": 130
+      },
+      "data": {
+        "serviceId": "user",
+        "label": "Users",
+        "category": "Client / Ingress",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false
+      }
+    },
+    {
+      "id": "node-igw",
+      "type": "serviceNode",
+      "position": {
+        "x": 150,
+        "y": 20
+      },
+      "data": {
+        "serviceId": "internet_gateway",
+        "label": "Internet Gateway",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false
+      }
+    },
+    {
+      "id": "node-nat",
+      "type": "serviceNode",
+      "position": {
+        "x": 300,
+        "y": 130
+      },
+      "data": {
+        "serviceId": "nat_gateway",
+        "label": "NAT Gateway",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "public",
+        "replicas": 1,
+        "multiAz": false
+      }
+    },
+    {
+      "id": "node-alb",
+      "type": "serviceNode",
+      "position": {
+        "x": 640,
+        "y": 130
+      },
+      "data": {
+        "serviceId": "alb",
+        "label": "Application Load Balancer",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "public",
+        "replicas": 1,
+        "multiAz": false
+      }
+    },
+    {
+      "id": "node-web-1",
+      "type": "serviceNode",
+      "position": {
+        "x": 470,
+        "y": 400
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "Web server 1",
+        "category": "Compute",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "private",
+        "replicas": 1,
+        "multiAz": false,
+        "iamRole": {
+          "id": "WebInstanceProfile",
+          "trustPolicy": {
+            "id": "WebInstanceProfileTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "principals": [
+                  "ec2.amazonaws.com"
+                ],
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": []
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "WebInstanceProfilePolicy",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "s3:GetObject"
+                  ],
+                  "resources": [
+                    "arn:aws:s3:::cicd-pipeline-artifacts/*"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "notes": "CodeDeploy agent installed; instance profile reads the revision."
+      }
+    },
+    {
+      "id": "node-web-2",
+      "type": "serviceNode",
+      "position": {
+        "x": 820,
+        "y": 400
+      },
+      "data": {
+        "serviceId": "ec2",
+        "label": "Web server 2",
+        "category": "Compute",
+        "health": "healthy",
+        "az": "AZ-B",
+        "subnet": "private",
+        "replicas": 1,
+        "multiAz": false,
+        "iamRole": {
+          "id": "WebInstanceProfile",
+          "trustPolicy": {
+            "id": "WebInstanceProfileTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "principals": [
+                  "ec2.amazonaws.com"
+                ],
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": []
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "WebInstanceProfilePolicy",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "s3:GetObject"
+                  ],
+                  "resources": [
+                    "arn:aws:s3:::cicd-pipeline-artifacts/*"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "notes": "CodeDeploy agent installed; instance profile reads the revision."
+      }
+    },
+    {
+      "id": "node-repo",
+      "type": "serviceNode",
+      "position": {
+        "x": 220,
+        "y": 700
+      },
+      "data": {
+        "serviceId": "codecommit",
+        "label": "app-repo (main)",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "branch": "main"
+        }
+      }
+    },
+    {
+      "id": "node-pipeline",
+      "type": "serviceNode",
+      "position": {
+        "x": 470,
+        "y": 700
+      },
+      "data": {
+        "serviceId": "codepipeline",
+        "label": "release-pipeline",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "iamRole": {
+          "id": "PipelineServiceRole",
+          "trustPolicy": {
+            "id": "PipelineServiceRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "principals": [
+                  "codepipeline.amazonaws.com"
+                ],
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": []
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "PipelineServiceRolePolicy",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "codecommit:GetBranch",
+                    "codecommit:GetCommit",
+                    "codecommit:UploadArchive",
+                    "codecommit:GetUploadArchiveStatus",
+                    "codebuild:StartBuild",
+                    "codebuild:BatchGetBuilds",
+                    "codedeploy:CreateDeployment",
+                    "codedeploy:GetDeployment",
+                    "codedeploy:GetDeploymentConfig",
+                    "codedeploy:GetApplicationRevision",
+                    "codedeploy:RegisterApplicationRevision",
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-build",
+      "type": "serviceNode",
+      "position": {
+        "x": 720,
+        "y": 700
+      },
+      "data": {
+        "serviceId": "codebuild",
+        "label": "app-build",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "buildspec": "buildspec.yml",
+          "computeType": "BUILD_GENERAL1_SMALL"
+        },
+        "iamRole": {
+          "id": "BuildServiceRole",
+          "trustPolicy": {
+            "id": "BuildServiceRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "principals": [
+                  "codebuild.amazonaws.com"
+                ],
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": []
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "BuildServiceRolePolicy",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-deploy",
+      "type": "serviceNode",
+      "position": {
+        "x": 970,
+        "y": 700
+      },
+      "data": {
+        "serviceId": "codedeploy",
+        "label": "web-deployment-group",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "deploymentConfig": "CodeDeployDefault.OneAtATime",
+          "autoRollback": true
+        },
+        "iamRole": {
+          "id": "CodeDeployServiceRole",
+          "trustPolicy": {
+            "id": "CodeDeployServiceRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "principals": [
+                  "codedeploy.amazonaws.com"
+                ],
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": []
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "CodeDeployServiceRolePolicy",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "ec2:DescribeInstances",
+                    "autoscaling:DescribeAutoScalingGroups"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-artifacts",
+      "type": "serviceNode",
+      "position": {
+        "x": 470,
+        "y": 880
+      },
+      "data": {
+        "serviceId": "s3",
+        "label": "Pipeline artifact bucket",
+        "category": "Storage",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "resourceArn": "arn:aws:s3:::cicd-pipeline-artifacts"
+        }
+      }
+    },
+    {
+      "id": "node-build-logs",
+      "type": "serviceNode",
+      "position": {
+        "x": 720,
+        "y": 880
+      },
+      "data": {
+        "serviceId": "cloudwatch",
+        "label": "/aws/codebuild/app-build",
+        "category": "Management & Governance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-user-alb",
+      "source": "node-user",
+      "target": "node-alb",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000,
+        "stepNumber": 1
+      }
+    },
+    {
+      "id": "e-alb-web1",
+      "source": "node-alb",
+      "target": "node-web-1",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTP",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000,
+        "stepNumber": 2
+      }
+    },
+    {
+      "id": "e-alb-web2",
+      "source": "node-alb",
+      "target": "node-web-2",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTP",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000,
+        "stepNumber": 2
+      }
+    },
+    {
+      "id": "e-repo-pipeline",
+      "source": "node-repo",
+      "target": "node-pipeline",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "e-pipeline-build",
+      "source": "node-pipeline",
+      "target": "node-build",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "e-pipeline-deploy",
+      "source": "node-pipeline",
+      "target": "node-deploy",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "e-pipeline-artifacts",
+      "source": "node-pipeline",
+      "target": "node-artifacts",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "e-build-logs",
+      "source": "node-build",
+      "target": "node-build-logs",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "e-deploy-web1",
+      "source": "node-deploy",
+      "target": "node-web-1",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "e-deploy-web2",
+      "source": "node-deploy",
+      "target": "node-web-2",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    }
+  ]
+}

@@ -127,7 +127,10 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": true,
-        "notes": "Stores original uploaded images. Configured with an S3 event notification on s3:ObjectCreated:*."
+        "notes": "Stores original uploaded images. Configured with an S3 event notification on s3:ObjectCreated:*.",
+        "customConfig": {
+          "resourceArn": "arn:aws:s3:::thumbnail-source"
+        }
       }
     },
     {
@@ -165,7 +168,54 @@
         "subnet": "private",
         "replicas": 5,
         "multiAz": true,
-        "notes": "Serverless compute function running inside the private subnet. Automatically triggered by S3 event notifications."
+        "notes": "Serverless compute function running inside the private subnet. Automatically triggered by S3 event notifications.",
+        "iamRole": {
+          "id": "CreateThumbnailExecutionRole",
+          "trustPolicy": {
+            "id": "CreateThumbnailExecutionRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "principals": [
+                  "lambda.amazonaws.com"
+                ],
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "resources": [
+                  "*"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "CreateThumbnailExecutionRolePolicy",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "s3:GetObject"
+                  ],
+                  "resources": [
+                    "arn:aws:s3:::thumbnail-source/*"
+                  ]
+                },
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "s3:PutObject"
+                  ],
+                  "resources": [
+                    "arn:aws:s3:::thumbnail-destination/*"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
       }
     },
     {
@@ -203,7 +253,10 @@
         "subnet": "global",
         "replicas": 1,
         "multiAz": true,
-        "notes": "Stores resized thumbnail images for low-latency distribution and client display."
+        "notes": "Stores resized thumbnail images for low-latency distribution and client display.",
+        "customConfig": {
+          "resourceArn": "arn:aws:s3:::thumbnail-destination"
+        }
       }
     }
   ],
@@ -275,7 +328,8 @@
         "interactionType": "synchronous",
         "isCriticalDependency": true,
         "timeoutMs": 2000,
-        "label": "4. Save thumbnail"
+        "label": "4. Save thumbnail",
+        "action": "s3:PutObject"
       }
     }
   ]

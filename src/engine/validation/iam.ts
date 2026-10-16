@@ -6,6 +6,7 @@ import { evaluateAuthorization } from '../iam/evaluate.ts';
 import { assumeRole } from '../iam/roleAssumption.ts';
 import type { Principal } from '../iam/types.ts';
 import { IAM_AUTHENTICATED_ACTIONS, IAM_CALLER_SERVICE_IDS as COMPUTE_SERVICE_IDS } from '../capability/iamCoverage.ts';
+import { normalizeTrustPolicy, servicePrincipalFor } from '../iam/servicePrincipals.ts';
 
 /**
  * Validates IAM configuration using the real, standalone IAM engine (`engine/iam/`) - never a
@@ -55,12 +56,12 @@ export function validateIam(
       id: roleId,
       kind: 'role',
       accountId: '000000000000',
-      trustPolicy: role.trustPolicy,
+      trustPolicy: normalizeTrustPolicy(role.trustPolicy, node.data.serviceId),
       identityPolicies: role.identityPolicies || [],
       permissionsBoundary: role.permissionsBoundary
     };
     const callerPrincipal: Principal = {
-      id: node.data.serviceId === 'ecs' ? 'ecs-tasks.amazonaws.com' : node.data.serviceId,
+      id: servicePrincipalFor(node.data.serviceId),
       kind: 'service',
       accountId: '000000000000',
       identityPolicies: []
