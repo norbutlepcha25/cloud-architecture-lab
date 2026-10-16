@@ -9,10 +9,7 @@ import {
   BookOpen,
   Download,
   FilePlus2,
-  ImageDown,
-  FolderOpen,
-  ChevronDown,
-  DollarSign
+  ImageDown
 } from 'lucide-react';
 import type { Theme } from '../../utils/theme.ts';
 import { ThemeToggle } from './ThemeToggle.tsx';
@@ -73,135 +70,88 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
     }
   };
 
+  const tab = (active: boolean) =>
+    `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+      active ? 'bg-[rgba(255,255,255,0.12)] text-white' : 'text-white/55 hover:text-white hover:bg-[rgba(255,255,255,0.06)]'
+    }`;
+  const iconButton = 'flex items-center justify-center w-8 h-8 rounded-md text-white/55 hover:text-white hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors';
+
   return (
-    <header className="bg-[#12181F] border-b border-black/40 px-3 py-2 flex flex-wrap gap-x-1.5 gap-y-2 items-center justify-between select-none z-30">
-      {/* Brand & Title - links back to the home page */}
+    <header className="h-12 shrink-0 bg-[#12181F] border-b border-black/40 px-3 flex items-center justify-between gap-3 select-none z-30">
+      {/* Brand - links back to the home page */}
       <a
         href="#home"
         onClick={event => { if (onHome) { event.preventDefault(); onHome(); } }}
-        className="flex items-center gap-3 rounded-md hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 focus-visible:outline-offset-2"
-        title="Go to the home page"
+        className="flex items-center gap-2.5 rounded-md hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 focus-visible:outline-offset-2"
+        title="Home"
       >
-        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-          <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
-            <path d="M12 28C6 28 2 23 2 17C2 11.5 6.5 7 12 7C13.5 7 15 7.5 16 8.5C18.5 4.5 22.5 2 27 2C35 2 41 8 41 16C44.5 17 47 20 47 24C47 29.5 42.5 34 37 34H12C7 34 2 29.5 2 24" stroke="#FF9900" strokeWidth="4" strokeLinecap="round" />
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-sm font-semibold text-white tracking-tight leading-none">
-            Cloud Architecture Lab
-          </h1>
-          <div className="text-[11px] text-white/40 hidden sm:block mt-0.5">
-            Design, simulate, and break AWS cloud architectures
-          </div>
-        </div>
+        <svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <path d="M12 28C6 28 2 23 2 17C2 11.5 6.5 7 12 7C13.5 7 15 7.5 16 8.5C18.5 4.5 22.5 2 27 2C35 2 41 8 41 16C44.5 17 47 20 47 24C47 29.5 42.5 34 37 34H12C7 34 2 29.5 2 24" stroke="#FF9900" strokeWidth="4" strokeLinecap="round" />
+        </svg>
+        <h1 className="text-sm font-semibold text-white tracking-tight hidden sm:block">
+          Cloud Architecture Lab
+        </h1>
       </a>
 
-
-      {/* Mode Switcher / Primary Tabs */}
-      <nav className="flex items-center gap-0.5 bg-black/25 p-1 rounded-lg border border-white/10">
-        <button
-          onClick={() => setAppMode('design')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            appMode === 'design'
-              ? 'bg-circuit-500 text-white font-semibold'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
+      {/* Modes and workspace tools */}
+      <nav className="flex items-center gap-0.5" aria-label="Workspace modes">
+        <button onClick={() => setAppMode('design')} className={tab(appMode === 'design')}>
           <Layers className="w-3.5 h-3.5" />
           <span>Design</span>
         </button>
-
-        <button
-          onClick={() => setAppMode('simulate')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            appMode === 'simulate'
-              ? 'bg-circuit-500 text-white font-semibold'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
+        <button onClick={() => setAppMode('simulate')} className={tab(appMode === 'simulate')}>
           <Activity className="w-3.5 h-3.5" />
           <span>Simulate</span>
         </button>
-
-        <button
-          onClick={() => setAppMode('failure')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            appMode === 'failure'
-              ? 'bg-circuit-500 text-white font-semibold'
-              : 'text-white/60 hover:text-white hover:bg-white/5'
-          }`}
-        >
+        <button onClick={() => setAppMode('failure')} className={tab(appMode === 'failure')}>
           <ShieldAlert className="w-3.5 h-3.5" />
           <span>Failure Lab</span>
         </button>
 
-        <div className="w-px h-4 bg-white/10 mx-0.5" />
+        <div className="w-px h-4 bg-[rgba(255,255,255,0.12)] mx-1.5" />
 
-        <button
-          onClick={onOpenAnalysis}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-        >
+        <button onClick={onOpenAnalysis} className={tab(false)}>
           <BarChart3 className="w-3.5 h-3.5" />
           <span>Analyze</span>
           {analysis.spofs.length > 0 && (
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-label={`${analysis.spofs.length} single points of failure`} />
           )}
         </button>
-
-        <button
-          onClick={onOpenLabs}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-        >
+        <button onClick={onOpenLabs} className={tab(false)}>
           <BookOpen className="w-3.5 h-3.5" />
           <span>Labs</span>
         </button>
       </nav>
 
-      {/* Right Actions: Templates Dropdown, Clear, Export */}
-      {onHome && <button onClick={onHome} className="px-2.5 py-2 rounded text-xs text-white/80 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">Home</button>}
-      <div className="flex items-center gap-1.5">
-        {theme && onToggleTheme && <ThemeToggle
-          theme={theme}
-          onToggle={onToggleTheme}
-          iconSize={14}
-          className="flex items-center px-1.5 py-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 text-xs font-medium transition-colors"
-        />}
-        {/* Estimated AWS Bill - live figure, kept visually distinct from the action buttons */}
+      {/* Actions */}
+      <div className="flex items-center gap-1">
         <button
           onClick={onOpenCost}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 text-xs font-medium transition-colors cursor-pointer"
-          title="Simulate realistic AWS architecture monthly bill & FinOps cost optimizations"
+          className="px-2.5 h-8 rounded-md text-white/70 hover:text-white hover:bg-[rgba(255,255,255,0.06)] text-xs font-mono tabular-nums transition-colors"
+          title="Estimated monthly cost"
         >
-          <DollarSign className="w-3.5 h-3.5" />
-          <span className="font-mono font-semibold tabular-nums">${costReport.monthlyTotal.toFixed(2)}/mo</span>
+          ${costReport.monthlyTotal.toFixed(2)}/mo
         </button>
 
-        <div className="w-px h-5 bg-white/10" />
+        <div className="w-px h-4 bg-[rgba(255,255,255,0.12)] mx-1" />
 
-        <button
-          onClick={handleNewCanvas}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 text-xs font-medium transition-colors"
-          title="Reset canvas to default VPC, Public and Private subnets"
-        >
-          <FilePlus2 className="w-3.5 h-3.5" />
-          <span className="hidden md:inline">New</span>
+        <button onClick={handleNewCanvas} className={iconButton} title="New canvas" aria-label="New canvas">
+          <FilePlus2 className="w-4 h-4" />
         </button>
-
         <button
           onClick={handleDownloadImage}
           disabled={isDownloadingImage || nodes.length === 0}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-white/60 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed text-xs font-medium transition-colors"
-          title="Download the diagram as a PNG image"
+          className={iconButton}
+          title={isDownloadingImage ? 'Rendering…' : 'Download PNG'}
+          aria-label="Download PNG"
         >
-          <ImageDown className="w-3.5 h-3.5" />
-          <span className="hidden md:inline">{isDownloadingImage ? 'Rendering…' : 'Download Image'}</span>
+          <ImageDown className="w-4 h-4" />
         </button>
+        {theme && onToggleTheme && <ThemeToggle theme={theme} onToggle={onToggleTheme} iconSize={16} className={iconButton} />}
 
-        {/* Export - the one primary action in the bar, given real visual weight */}
         <button
           onClick={onOpenExport}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-white text-[#12181F] hover:bg-white/90 dark:bg-white dark:hover:bg-white/90 text-xs font-semibold transition-colors ml-1"
+          className="flex items-center gap-1.5 px-3 h-8 rounded-md bg-[#ffffff] text-[#12181F] hover:bg-[#e8ebef] text-xs font-semibold transition-colors ml-1"
         >
           <Download className="w-3.5 h-3.5" />
           <span>Export</span>

@@ -3,21 +3,30 @@ import type { Node, Edge } from '@xyflow/react';
 import type { ServiceNodeData, ConnectionData, SimulationScenario, SimulationResult } from '../../types/index.ts';
 import type { RequestTrace } from '../trace/types.ts';
 import { runSimulation } from './requestSimulator.ts';
+import { resultEvidence } from './resultEvidence.ts';
 
 /** The UI executes this entry point. Explanations are immutable run evidence, never a second run. */
 export function runLiveSimulation(nodes: Node<ServiceNodeData>[], edges: Edge<ConnectionData>[], scenario: SimulationScenario): SimulationResult {
-  const result = runSimulation(nodes, edges, scenario, { enforceIam: true });
+  // Explicit step numbers still define workload priority. IDs break otherwise ambiguous ties;
+  // canvas insertion order and JSON serialization order must not select a different path.
+  const byId = (a: { id: string }, b: { id: string }) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  const result = runSimulation([...nodes].sort(byId), [...edges].sort(byId), scenario, { enforceIam: true });
+  Object.assign(result, resultEvidence(result));
   if (edges.some(edge => isDependencyCall(edge.data))) {
     result.summary += ' Scope: the forwarding path and supported dependency calls were evaluated; other dependency-only arrows were not executed.';
   }
   if (edges.some(edge => ['authorization', 'manages', 'route-association', 'target-registration'].includes(relationshipKind(edge.data)))) {
     result.summary += ' Scope: structural relationships do not carry requests; ASG control-plane changes run separately through the scaling controls. Other structural control-plane behavior is not yet simulated.';
   }
-  return result;
+  // Some legacy steps include nested configuration objects. Capture evidence before the UI
+  // edits those objects or applies returned service state to the architecture.
+  return structuredClone(result);
 }
 
 export function traceFromSimulation(result: SimulationResult): RequestTrace {
+  const { kind, outcome } = resultEvidence(result);
   return {
+    kind,
     entries: result.steps.map((step, index) => step.details?.decision
       ? { ...step.details.decision, order: index + 1,
           metadata: { ...step.details.decision.metadata, stepId: step.id, timestampMs: step.timestampMs } }
@@ -29,6 +38,6 @@ export function traceFromSimulation(result: SimulationResult): RequestTrace {
           awsRule: 'Recorded simulator decision. This legacy stage does not yet provide a verified AWS rule reference.',
           metadata: { ...step.details, stepId: step.id, timestampMs: step.timestampMs, ruleReferenceAvailable: false }
         }),
-    final: result.success ? 'SUCCESS' : 'DENIED', why: result.summary
+    final: outcome === 'success' ? 'SUCCESS' : outcome === 'denied' ? 'DENIED' : outcome === 'unsupported' ? 'UNSUPPORTED' : 'FAILURE', why: result.summary
   };
 }

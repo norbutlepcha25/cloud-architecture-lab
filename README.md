@@ -93,3 +93,11 @@ assistance. If the API is offline, rate-limited, invalid, or exceeds the ten-sec
 refresh timeout, the page retains the curated fallback credits. A successful empty
 response displays no contributor cards. Contributor cards render directly on the home page; no contribution-history
 link is shown.
+
+### Usage analytics
+
+Optional Umami integration tracks visits, geographic breakdowns and lab activity,
+including active time. Set the public `VITE_UMAMI_*` build settings from
+[.env.example](.env.example); tracking is off until configured. See
+[analytics setup and metrics](docs/analytics.md) for activation, dashboard reports,
+Docker/CI configuration and privacy controls.

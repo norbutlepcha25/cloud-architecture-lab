@@ -33,7 +33,7 @@ export function renderTrace(trace: RequestTrace, mode: ExplanationMode = 'detail
 
   lines.push('FINAL:');
   lines.push(trace.final);
-  if (trace.final === 'DENIED') {
+  if (trace.final !== 'SUCCESS') {
     lines.push('');
     lines.push('WHY:');
     lines.push(trace.why);

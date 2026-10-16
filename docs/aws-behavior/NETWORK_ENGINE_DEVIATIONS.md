@@ -105,3 +105,12 @@ simulator, not just in standalone tests:
   genuinely new, live capability: a Security Group rule can now reference another Security Group by
   id and have that reference enforced against the real attached-Security-Group data of whichever
   node is actually the source of a given hop (`test/network-engine.test.ts` N18).
+
+## Live explicit inbound context increment (2026-10-16)
+
+Live forwarding and supported child calls now pass explicit source private IPv4
+and optional connection destinationPort to the existing inbound NACL/SG evaluators.
+Unknown source or omitted port retains the legacy educational abstraction and is
+disclosed by trace metadata. See live-firewall-context.test.ts. This does not
+implement egress, all transport normalization, return routes or real response ports;
+legacy checkCustomNaclReturn heuristics remain. Do not infer full network fidelity.

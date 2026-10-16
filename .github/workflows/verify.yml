@@ -19,6 +19,9 @@ jobs:
       - run: npm test
       - run: npm run build
         env:
+          VITE_UMAMI_WEBSITE_ID: ${{ vars.VITE_UMAMI_WEBSITE_ID }}
+          VITE_UMAMI_SCRIPT_URL: ${{ vars.VITE_UMAMI_SCRIPT_URL }}
+          VITE_UMAMI_DOMAINS: ${{ vars.VITE_UMAMI_DOMAINS }}
           RELEASE_CHANNEL: ${{ github.ref == 'refs/heads/main' && 'stable' || 'preview' }}
           RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@v4

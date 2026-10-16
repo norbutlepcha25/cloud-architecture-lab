@@ -1,14 +1,14 @@
 import { orderConnections, orderTargets, hasStepNumber } from './connectionOrder.ts';
-import { checkConnection } from '../architecture/connectionContracts.ts';
-import { evaluateLiveRoute } from '../network/liveRouting.ts';
+import { checkConnection, hasConnectionContract } from '../architecture/connectionContracts.ts';
+import { resolveRequestStart } from './requestStart.ts';
+import { isDedicatedModel } from '../service/registry.ts';
+import { evaluateApplicationHop } from './applicationHop.ts';
 import { validateNetworkIdentities } from '../architecture/networkIdentity.ts';
 import { deriveSubnetForNode } from '../layout/containment.ts';
 import { carriesRequest, isDependencyCall } from '../architecture/relationships.ts';
-import { authorizeApplicationHop } from '../iam/applicationHop.ts';
-import { IAM_CALLER_SERVICE_IDS, IAM_AUTHENTICATED_ACTIONS } from '../capability/iamCoverage.ts';
 import type { Node, Edge } from '@xyflow/react';
 import type { ServiceNodeData, ConnectionData, SimulationScenario, SimulationResult } from '../../types/index.ts';
-import { checkNetworkFirewalls, checkCustomNaclReturn } from './networkFirewalls.ts';
+import { checkCustomNaclReturn } from './networkFirewalls.ts';
 import { SimulationTrace, SIMULATION_PIPELINE } from './adapters/index.ts';
 import type { AdapterContext } from './adapters/index.ts';
 
@@ -40,14 +40,12 @@ export function runSimulation(
 
   const boundaryNodes = nodes.filter(n => n.type === 'boundaryNode');
 
-  // Find start node strictly among service nodes (never a boundary container)
-  const serviceNodes = nodes.filter(n => n.type === 'serviceNode' || (!n.type && (n.data as any)?.serviceId));
-  let startNode = serviceNodes.find(n => n.id === scenario.startNodeId);
-  if (!startNode) {
-    startNode = serviceNodes.find(n => ['user', 'client_ui', 'api_client'].includes(n.data?.serviceId))
-      || serviceNodes.find(n => ['internet_gateway', 'cloudfront', 'route53', 'alb', 'api_gateway'].includes(n.data?.serviceId))
-      || serviceNodes[0];
-  }
+  const startNode = resolveRequestStart(nodes, scenario.startNodeId, !options.enforceIam);
+  if (!startNode && options.enforceIam && scenario.startNodeId) return {
+    scenario, steps: [], success: false, totalLatencyMs: 0, statusCode: 400,
+    summary: `Request start resource "${scenario.startNodeId}" is missing or is not executable. Select a service entry point.`,
+    bottlenecksDetected: [], path: [], cascadeOccurred: false
+  };
 
   if (!startNode) {
     return {
@@ -91,78 +89,11 @@ export function runSimulation(
   });
   trace.advanceTime(5);
 
-  // Shared by every hop that can be gated by a Network ACL or Security Group (load-balancer to
-  // target, compute to database, VPC endpoint hops, and the generic direct-connection path).
-  // Pushes one step per configured layer that actually gets evaluated (NACL first, then Security
-  // Group, matching real packet order) - a failure step for whichever layer blocks first, or an
-  // informational "allowed" step when a layer has explicit rules and lets the traffic through,
-  // so the mechanism is visible in the trace either way. A layer with no rules configured
-  // produces no step at all, so every other reference architecture (none of which set these
-  // fields) is unaffected. Returns whether the caller should stop traversal.
-  const pushFirewallBlockIfAny = (source: Node<ServiceNodeData>, target: Node<ServiceNodeData>, protocol: string): boolean => {
-    const routing = evaluateLiveRoute(source, target, nodes);
-    if (routing.outcome !== 'legacy') {
-      const allowed = routing.outcome === 'allowed';
-      trace.pushStep({ sourceNodeId: source.id, targetNodeId: target.id,
-        sourceNodeName: source.data.label, targetNodeName: target.data.label,
-        protocol: protocol as any, action: `Route evaluation: ${routing.outcome}`,
-        status: allowed ? 'success' : 'failed', explanation: routing.reason,
-        targetHealth: target.data.health, latencyMs: 0 });
-      if (!allowed) {
-        trace.fail(routing.outcome === 'unsupported' ? 501 : routing.outcome === 'invalid' ? 400 : 504, routing.reason);
-        return true;
-      }
-    }
-    const firewall = checkNetworkFirewalls(protocol, target, boundaryNodes, source);
-
-    for (const layer of [
-      { name: 'Network ACL' as const, result: firewall.nacl },
-      { name: 'Security Group' as const, result: firewall.securityGroup }
-    ]) {
-      if (!layer.result.evaluated) continue;
-
-      trace.pushStep({
-        sourceNodeId: source.id,
-        targetNodeId: target.id,
-        sourceNodeName: source.data.label,
-        targetNodeName: target.data.label,
-        protocol: protocol as any,
-        action: layer.result.blocked ? `${layer.name} Blocked Traffic` : `${layer.name}: Traffic Allowed`,
-        status: layer.result.blocked ? 'failed' : 'success',
-        explanation: layer.result.blocked ? `PACKET BLOCKED: ${layer.result.note}` : layer.result.note!,
-        targetHealth: layer.result.blocked ? 'failed' : target.data.health,
-        latencyMs: layer.result.blocked ? 5 : 2,
-        details: layer.result.blocked
-          ? { statusCode: 403, failureReason: layer.result.note }
-          : undefined
-      });
-
-      if (layer.result.blocked) {
-        trace.fail(403, `Request blocked by ${layer.name} on ${layer.result.boundaryLabel}: ${target.data.label} never received the ${protocol} request.`);
-        return true;
-      }
-
-      trace.advanceTime(2);
-    }
-
-    if (options.enforceIam && IAM_AUTHENTICATED_ACTIONS[target.data.serviceId]) {
-      // Preserve the application identity through transparent NAT/endpoint hops.
-      const caller = IAM_CALLER_SERVICE_IDS.includes(source.data.serviceId) ? source
-        : [...path].reverse().find(n => IAM_CALLER_SERVICE_IDS.includes(n.data.serviceId));
-      if (caller) {
-        const edge = edges.find(e => e.source === source.id && e.target === target.id);
-        const decision = authorizeApplicationHop(caller, target, protocol, edge?.data?.action as string | undefined);
-        trace.pushStep({ sourceNodeId: source.id, targetNodeId: target.id,
-          sourceNodeName: source.data.label, targetNodeName: target.data.label,
-          protocol: protocol as any, action: 'IAM authorization',
-          status: decision.decision === 'DENY' ? 'failed' : 'success',
-          explanation: decision.reason, targetHealth: target.data.health, latencyMs: 0,
-          details: { decision, statusCode: decision.decision === 'DENY' ? 403 : undefined } });
-        if (decision.decision === 'DENY') { trace.fail(403, decision.reason); return true; }
-      }
-    }
-    return false;
-  };
+  // All forwarding and child-call adapters share the same gate and may provide their own
+  // evidence sink. The selected connection preserves action/port identity.
+  const pushFirewallBlockIfAny = (source: Node<ServiceNodeData>, target: Node<ServiceNodeData>, protocol: string, hopTrace = trace, connection?: Edge<ConnectionData>): boolean =>
+    evaluateApplicationHop({ source, target, protocol, nodes, path, enforceIam: options.enforceIam,
+      trace: hopTrace, connection: connection ?? edges.find(edge => edge.source === source.id && edge.target === target.id) });
 
   while (currentNode) {
     if (++hops > MAX_HOPS) {
@@ -184,6 +115,18 @@ export function runSimulation(
     }
 
     visited.add(currentNode.id);
+
+    // Catalog presence is not request coverage. Preserve existing explicit interaction
+    // contracts (including Amplify's frontend abstraction) and the bounded App Runner adapter.
+    if (options.enforceIam && !isDedicatedModel(currentNode.data.serviceId)
+        && !hasConnectionContract(currentNode.data.serviceId) && currentNode.data.serviceId !== 'app_runner') {
+      const reason = `Behavior not modeled for ${currentNode.data.serviceId}: catalog metadata and health alone do not establish request execution.`;
+      trace.pushStep({ sourceNodeId: currentNode.id, targetNodeId: currentNode.id,
+        sourceNodeName: currentNode.data.label, targetNodeName: currentNode.data.label,
+        protocol: 'HTTP', action: 'Unsupported service execution', status: 'failed',
+        explanation: reason, targetHealth: currentNode.data.health, latencyMs: 0 });
+      trace.fail(501, reason); break;
+    }
 
     // Check if current node is failed
     if (currentNode.data.health === 'failed') {
@@ -240,7 +183,7 @@ export function runSimulation(
     const sourceEdges = orderConnections(edges.filter(e => e.source === currentNode!.id && (e.data as any)?.signalType !== 'outbound_response'));
     const outgoingEdges = sourceEdges.filter(e => carriesRequest(e.data));
     const dependencyEdges = sourceEdges.filter(e => isDependencyCall(e.data));
-    const invalid = [...outgoingEdges, ...dependencyEdges.filter(edge => nodes.find(n => n.id === edge.target)?.data.serviceId === 'dynamodb')].map(edge => ({ edge, result: checkConnection(currentNode, nodes.find(n => n.id === edge.target), edge.data) })).find(item => item.result.status !== 'valid');
+    const invalid = outgoingEdges.map(edge => ({ edge, result: checkConnection(currentNode, nodes.find(n => n.id === edge.target), edge.data) })).find(item => item.result.status !== 'valid');
     if (invalid && options.enforceIam) {
       trace.pushStep({ sourceNodeId: currentNode.id, targetNodeId: invalid.edge.target,
         sourceNodeName: currentNode.data.label, targetNodeName: nodes.find(n => n.id === invalid.edge.target)?.data.label ?? invalid.edge.target,

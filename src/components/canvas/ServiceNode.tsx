@@ -19,22 +19,26 @@ export const ServiceNode = memo((props: any) => {
   const isFailed = nodeData.health === 'failed';
   const isDegraded = nodeData.health === 'degraded';
   const isSimActive = nodeData.isSimulating;
+  // Set by the canvas from engine/analysis/strayComponents.ts; display only.
+  const strayReasons: string[] | undefined = (nodeData as any).strayReasons;
 
   // Visual halo for active simulation, failure, or degradation - driven entirely by the
   // simulation/failure engines' real `health`/`isSimulating` state, never decorative.
-  let iconWrapperClasses = 'transition-all duration-200';
+  let iconWrapperClasses = 'service-node-icon transition-all duration-200';
   if (isFailed) {
     iconWrapperClasses += ' ring-2 ring-rose-500 rounded-lg p-0.5 bg-rose-50 dark:bg-rose-950/60';
   } else if (isSimActive) {
     iconWrapperClasses += ' ring-4 ring-amber-400 rounded-lg p-0.5 shadow-lg shadow-amber-300/60 scale-105';
   } else if (isDegraded) {
     iconWrapperClasses += ' ring-2 ring-amber-400 rounded-lg p-0.5 bg-amber-50 dark:bg-amber-950/60';
+  } else if (strayReasons && !selected) {
+    iconWrapperClasses += ' outline outline-2 outline-dashed outline-amber-400 outline-offset-2 rounded-lg';
   } else if (selected) {
     iconWrapperClasses += ' ring-2 ring-circuit-600 rounded-lg p-0.5 shadow-md shadow-circuit-200 dark:shadow-circuit-900';
   }
 
   return (
-    <div className="flex flex-col items-center justify-center p-1 select-none group min-w-[100px] max-w-[140px] text-center">
+    <div className="flex flex-col items-center justify-center p-1 select-none group min-w-[100px] max-w-[140px] text-center" title={strayReasons ? strayReasons.join(' · ') : undefined}>
       {nodeData.customConfig?.asgAlarm && <span className="text-[10px] bg-amber-100 text-amber-900 px-2 rounded">{nodeData.customConfig.asgAlarm.state}</span>}
       {nodeData.customConfig?.asgRuntime && <span className="text-[10px] bg-blue-100 text-blue-900 px-2 rounded">Desired: {nodeData.customConfig.asgRuntime.desired}</span>}
       {asgInstance && <span className={`text-[10px] rounded px-2 py-0.5 mb-1 ${asgInstance.state === 'InService' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800 motion-safe:animate-pulse'}`}>{asgInstance.state}</span>}

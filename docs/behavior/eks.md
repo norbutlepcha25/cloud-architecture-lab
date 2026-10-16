@@ -83,3 +83,11 @@ load balancer. Its internal routing, targets and health checks are not simulated
 `test/eks-image-reference.test.ts` verifies the separate managed-NLB reference
 and its non-request links.
 Source: [AWS EKS control plane](https://docs.aws.amazon.com/eks/latest/best-practices/control-plane.html).
+
+## Reference integrity correction (2026-10-16)
+
+Reference 15 pointed its explicit scenario at a missing `eks-workload` node. The
+observed three-Ready-pod workload snapshot has been restored inside subnet B with
+an explicit workload role. Existing supplied component positions and management
+edges are preserved. Readiness and containment regression tests establish this
+bounded scenario; they do not implement scheduling or node/pod failure propagation.

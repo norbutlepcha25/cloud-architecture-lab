@@ -1,5 +1,10 @@
 services:
   cloud-architecture-lab:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_UMAMI_WEBSITE_ID: ${VITE_UMAMI_WEBSITE_ID:-}
+        VITE_UMAMI_SCRIPT_URL: ${VITE_UMAMI_SCRIPT_URL:-}
+        VITE_UMAMI_DOMAINS: ${VITE_UMAMI_DOMAINS:-}
     ports:
       - "8080:80"

@@ -5,7 +5,7 @@
   "expected": "SUCCESS: the enrolment request reaches the private ECS tasks.",
   "nodes": [
     {
-      "id": "lab-vpc",
+      "id": "box-vpc",
       "type": "boundaryNode",
       "position": {
         "x": -2,

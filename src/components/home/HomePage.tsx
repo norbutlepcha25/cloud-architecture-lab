@@ -1,3 +1,4 @@
+import { AnalyticsNotice } from '../../analytics/AnalyticsNotice.tsx';
 import React from 'react';
 import { fallbackContributors, loadContributors, type Contributor } from '../../utils/contributors.ts';
 import { ArrowRight, GitBranch, MessageSquare, Bug, ShieldAlert, Play, Layers, BookOpen, Copy, Check, Terminal, Users, School, FlaskConical, XCircle, FileDown, FileUp, HardDrive, ImageDown, ExternalLink } from 'lucide-react';
@@ -454,6 +455,7 @@ export function HomePage({ onStart }: { onStart: () => void }) {
       <nav aria-label="Footer: Learn"><h3>Learn</h3><a href="#see-it">See it work</a><a href="#how-it-works">First experiment</a><a href="#guide">Interface guide</a><a href="#save">Save &amp; export</a><a href="#labs">Guided labs</a><a href="#aws-docs">AWS documentation</a></nav>
       <nav aria-label="Footer: Project"><h3>Project</h3><a href={repository} target="_blank" rel="noopener noreferrer">Source on GitHub</a><a href={`${repository}/issues`} target="_blank" rel="noopener noreferrer">Issues</a><a href={`${repository}/blob/main/USER_MANUAL.md`} target="_blank" rel="noopener noreferrer">User manual</a></nav>
       <p className="home-disclaimer">Cloud Architecture Lab is an independent, open-source educational project. It is not affiliated with, endorsed by, or sponsored by Amazon Web Services, Inc. or Amazon.com, Inc. Amazon Web Services, AWS, and related service names and icons are trademarks of Amazon.com, Inc. or its affiliates, used here for identification and educational purposes only. Simulated behavior is an approximation and is not official AWS documentation.</p>
+      <AnalyticsNotice />
     </footer></div>
   </div>;
 }

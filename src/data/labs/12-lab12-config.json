@@ -896,6 +896,18 @@
       "style": {
         "strokeDasharray": "6 4"
       }
+    },
+    {
+      "id": "lab-web-lab-task-a",
+      "source": "lab-web",
+      "target": "lab-task-a",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTP",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1500
+      }
     }
   ],
   "scenario": {

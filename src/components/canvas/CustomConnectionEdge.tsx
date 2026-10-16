@@ -281,9 +281,7 @@ export const CustomConnectionEdge = memo(({
         { x: sourceX, y: sourceY, position: sourcePosition },
         { x: targetX, y: targetY, position: targetPosition },
       ].map((end, index) => {
-        const x = end.x + (end.position === 'left' ? -14 : end.position === 'right' ? 14 : 0);
-        const y = end.y + (end.position === 'top' ? -14 : end.position === 'bottom' ? 14 : 0);
-        return <svg key={index} x={x - 12} y={y - 12} width={24} height={24}
+        return <svg key={index} x={end.x - 8} y={end.y - 8} width={16} height={16}
           viewBox="0 0 24 24" className="connection-move-glyph" aria-hidden="true"><MoveGlyph /></svg>;
       })}
       <BaseEdge
@@ -418,9 +416,8 @@ export const CustomConnectionEdge = memo(({
         >
           {/* Stateless Block Warning Badge (Callout from problem 3.1) */}
           {edgeData.hasMissingReturnBlock && (
-            <div className="mb-1 flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-50 border border-rose-300 text-rose-700 shadow-sm animate-pulse whitespace-nowrap">
-              <span className="bg-rose-600 text-white font-mono text-[9px] font-bold px-1 rounded">XX</span>
-              <span className="text-[10px] font-bold tracking-tight">MISSING RETURN RULE STATELESS BLOCK</span>
+            <div className="mb-1 flex items-center gap-1.5 px-2 py-0.5 rounded bg-white border border-rose-300 text-rose-700 whitespace-nowrap dark:bg-slate-900">
+              <span className="text-[10px] font-semibold">Missing NACL return rule</span>
             </div>
           )}
 
@@ -484,29 +481,10 @@ export const CustomConnectionEdge = memo(({
           )}
 
           {/* 6. Rich Interactive Tooltip on Line Hover */}
-          {isHovered && effectiveStatus !== 'dimmed' && (flowAction || flowStepNumber || edgeData.protocol) && (
-            <div className={`absolute ${labelY < 140 ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 w-64 p-3 rounded-xl bg-white border border-slate-200 shadow-2xl dark:bg-slate-900 dark:border-slate-700 pointer-events-none text-left z-[99999] animate-in fade-in zoom-in-95 duration-150`}>
-              <div className="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-100 dark:border-slate-700">
-                <span className="text-[10px] font-mono font-bold text-circuit-600 uppercase tracking-wider">
-                  {displayStep ? `Task Flow • Step ${displayStep}` : 'Connection Line'}
-                </span>
-                <span
-                  className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
-                    effectiveStatus === 'active'
-                      ? 'bg-circuit-100 text-circuit-800'
-                      : effectiveStatus === 'failed'
-                      ? 'bg-rose-100 text-rose-800'
-                      : effectiveStatus === 'completed'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  {effectiveStatus.toUpperCase()}
-                </span>
-              </div>
-
+          {isHovered && effectiveStatus !== 'dimmed' && (flowAction || flowStepNumber) && (
+            <div className={`absolute ${labelY < 140 ? 'top-full mt-2' : 'bottom-full mb-2'} left-1/2 -translate-x-1/2 w-60 px-3 py-2 rounded-lg bg-white border border-slate-200 shadow-lg dark:bg-slate-900 dark:border-slate-700 pointer-events-none text-left z-[99999]`}>
               {flowAction && (
-                <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-snug mb-1">
+                <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug mb-1">
                   {flowAction}
                 </div>
               )}
@@ -530,16 +508,11 @@ export const CustomConnectionEdge = memo(({
               </div>
 
               {flowExplanation && (
-                <p className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-700 pt-1 line-clamp-2">
+                <p className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
                   {flowExplanation}
                 </p>
               )}
 
-              {flowStepIndex !== undefined && (
-                <div className="mt-1.5 pt-1 border-t border-slate-100 dark:border-slate-700 text-[9px] text-circuit-600 font-semibold flex items-center gap-1">
-                  <span>Click badge to trace step</span>
-                </div>
-              )}
             </div>
           )}
         </div>

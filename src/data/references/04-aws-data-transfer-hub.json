@@ -510,6 +510,30 @@
         "isCriticalDependency": true,
         "timeoutMs": 3000
       }
+    },
+    {
+      "id": "e-user-ui",
+      "source": "node-user",
+      "target": "node-ui",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
+    },
+    {
+      "id": "e-cognito-oidc",
+      "source": "node-cognito",
+      "target": "node-openid",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000
+      }
     }
   ]
 }
