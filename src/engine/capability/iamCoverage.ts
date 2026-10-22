@@ -9,6 +9,8 @@
  *  network connection. Mapped to one representative action each, just enough to ask "does this
  *  role's policy grant anything at all for this dependency." */
 export const IAM_AUTHENTICATED_ACTIONS: Record<string, string> = {
+  kinesis: 'kinesis:PutRecord', acm: 'acm:DescribeCertificate',
+  xray: 'xray:PutTraceSegments',
   s3: 's3:GetObject',
   dynamodb: 'dynamodb:GetItem',
   sqs: 'sqs:SendMessage',

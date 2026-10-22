@@ -1,0 +1,1387 @@
+{
+  "id": "secure-cicd-ecs-bluegreen",
+  "category": "CI/CD & Developer Tools",
+  "difficulty": "Advanced",
+  "description": "A developer pushes to CodeCommit (pull requests to main need approvals). CodePipeline orchestrates the release: CodeBuild pulls pinned packages from CodeArtifact, reads Secrets Manager and Parameter Store, pushes an image tagged with the commit SHA to ECR and signs it with AWS Signer. CodeDeploy then shifts the ECS service blue/green behind the ALB, and a CloudWatch alarm on the ALB 5XX rate is attached to the deployment group for automatic rollback. ECR enhanced scanning sends Inspector findings to Security Hub; the application reads feature flags from AppConfig; CloudTrail records who deployed what.",
+  "learningOutcome": "Select the Developer and choose git push (or Run pipeline on the pipeline). Then break it: set the developer to read-only, remove secretsmanager:GetSecretValue from the build role, fail CodeArtifact, or set the alarm to ALARM in the deployment group panel and watch CodeDeploy stop and roll back. Corrects common diagram mistakes: CodePipeline (not Signer) hands the build to CodeDeploy, and the alarm attaches to the deployment group, not to a Lambda alias.",
+  "name": "Secure CI/CD: CodePipeline → CodeBuild → CodeDeploy ECS blue/green",
+  "nodes": [
+    {
+      "id": "box-vpc",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1180,
+        "y": 40
+      },
+      "data": {
+        "label": "Application VPC",
+        "boundaryType": "vpc",
+        "width": 720,
+        "height": 520,
+        "cidr": "10.0.0.0/16",
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 720,
+        "height": 520
+      },
+      "draggable": false,
+      "selectable": true,
+      "zIndex": -4,
+      "measured": {
+        "width": 720,
+        "height": 520
+      }
+    },
+    {
+      "id": "box-public",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1200,
+        "y": 80
+      },
+      "data": {
+        "label": "Public subnet",
+        "boundaryType": "public_subnet",
+        "width": 680,
+        "height": 170,
+        "cidr": "10.0.0.0/17",
+        "totalAddresses": 32768,
+        "usableHosts": 32763,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.0.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.0.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.0.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.0.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.127.255",
+            "offset": 32767,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.0.4",
+          "end": "10.0.127.254"
+        },
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 680,
+        "height": 170
+      },
+      "draggable": false,
+      "selectable": true,
+      "zIndex": -3,
+      "measured": {
+        "width": 680,
+        "height": 170
+      }
+    },
+    {
+      "id": "box-private",
+      "type": "boundaryNode",
+      "position": {
+        "x": 1200,
+        "y": 300
+      },
+      "data": {
+        "label": "Private subnet",
+        "boundaryType": "private_subnet",
+        "width": 680,
+        "height": 240,
+        "cidr": "10.0.128.0/17",
+        "totalAddresses": 32768,
+        "usableHosts": 32763,
+        "reservedAddresses": [
+          {
+            "ip": "10.0.128.0",
+            "offset": 0,
+            "role": "Network Address",
+            "description": "First address in the subnet. Identifies the network itself."
+          },
+          {
+            "ip": "10.0.128.1",
+            "offset": 1,
+            "role": "VPC Router",
+            "description": "Reserved by AWS for the default VPC router / subnet gateway."
+          },
+          {
+            "ip": "10.0.128.2",
+            "offset": 2,
+            "role": "Amazon-Provided DNS",
+            "description": "Reserved by AWS for the DNS resolver (Route 53 Resolver / AmazonProvidedDNS)."
+          },
+          {
+            "ip": "10.0.128.3",
+            "offset": 3,
+            "role": "AWS Future Use",
+            "description": "Reserved by AWS for potential future internal functionality."
+          },
+          {
+            "ip": "10.0.255.255",
+            "offset": 32767,
+            "role": "Network Broadcast Address",
+            "description": "Last address in the subnet. AWS does not support broadcast in a VPC, but reserves the address."
+          }
+        ],
+        "usableRange": {
+          "start": "10.0.128.4",
+          "end": "10.0.255.254"
+        },
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "style": {
+        "width": 680,
+        "height": 240
+      },
+      "draggable": false,
+      "selectable": true,
+      "zIndex": -3,
+      "measured": {
+        "width": 680,
+        "height": 240
+      },
+      "selected": false
+    },
+    {
+      "id": "node-user",
+      "type": "serviceNode",
+      "position": {
+        "x": 1000,
+        "y": 130
+      },
+      "data": {
+        "serviceId": "user",
+        "label": "Customers",
+        "category": "Client / Ingress",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 100,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 100,
+        "height": 81
+      },
+      "style": {
+        "width": 100,
+        "height": 81
+      }
+    },
+    {
+      "id": "node-igw",
+      "type": "serviceNode",
+      "position": {
+        "x": 1130,
+        "y": 20
+      },
+      "data": {
+        "serviceId": "internet_gateway",
+        "label": "Internet Gateway",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 125,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 125,
+        "height": 81
+      },
+      "style": {
+        "width": 125,
+        "height": 81
+      }
+    },
+    {
+      "id": "node-alb",
+      "type": "serviceNode",
+      "position": {
+        "x": 1476.486204476295,
+        "y": 117.83382115352313
+      },
+      "data": {
+        "serviceId": "alb",
+        "label": "orders-alb (prod + test listeners)",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "public",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-nat",
+      "type": "serviceNode",
+      "position": {
+        "x": 1336.7623060811914,
+        "y": 135.78415373874608
+      },
+      "data": {
+        "serviceId": "nat_gateway",
+        "label": "NAT Gateway",
+        "category": "Networking & Content Delivery",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "public",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 100,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 100,
+        "height": 81
+      },
+      "style": {
+        "width": 100,
+        "height": 81
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-ecs",
+      "type": "serviceNode",
+      "position": {
+        "x": 1476.218302524428,
+        "y": 397.1714410418204
+      },
+      "data": {
+        "serviceId": "ecs",
+        "label": "orders-service (CodeDeploy blue/green)",
+        "category": "Compute",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "private",
+        "replicas": 1,
+        "multiAz": false,
+        "iamRole": {
+          "id": "OrdersTaskRole",
+          "trustPolicy": {
+            "id": "OrdersTaskRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "principals": [
+                  "ecs-tasks.amazonaws.com"
+                ],
+                "resources": [
+                  "*"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "OrdersTaskRolePermissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "appconfig:StartConfigurationSession",
+                    "appconfig:GetLatestConfiguration"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "width": 140,
+        "height": 115,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 115
+      },
+      "style": {
+        "width": 140,
+        "height": 115
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-dev",
+      "type": "serviceNode",
+      "position": {
+        "x": -299.69830352108244,
+        "y": 659.2544245756102
+      },
+      "data": {
+        "serviceId": "developer",
+        "label": "Developer",
+        "category": "Third-Party & External",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "branch": "main",
+          "gitCredentials": true,
+          "iamPolicy": "power-user"
+        },
+        "width": 100,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 100,
+        "height": 81
+      },
+      "style": {
+        "width": 100,
+        "height": 81
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-repo",
+      "type": "serviceNode",
+      "position": {
+        "x": -46.141586419529,
+        "y": 646.6347546997781
+      },
+      "data": {
+        "serviceId": "codecommit",
+        "label": "orders-repo (approval rules on main)",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "branch": "main"
+        },
+        "width": 140,
+        "height": 115,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 115
+      },
+      "style": {
+        "width": 140,
+        "height": 115
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-pipeline",
+      "type": "serviceNode",
+      "position": {
+        "x": 188.71480972947236,
+        "y": 660.0957359006658
+      },
+      "data": {
+        "serviceId": "codepipeline",
+        "label": "release-pipeline",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "iamRole": {
+          "id": "PipelineServiceRole",
+          "trustPolicy": {
+            "id": "PipelineServiceRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "principals": [
+                  "codepipeline.amazonaws.com"
+                ],
+                "resources": [
+                  "*"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "PipelineServiceRolePermissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "codecommit:GetBranch",
+                    "codecommit:GetCommit",
+                    "codecommit:UploadArchive",
+                    "codecommit:GetUploadArchiveStatus",
+                    "codebuild:StartBuild",
+                    "codebuild:BatchGetBuilds",
+                    "codedeploy:CreateDeployment",
+                    "codedeploy:GetDeployment",
+                    "codedeploy:GetDeploymentConfig",
+                    "codedeploy:GetApplicationRevision",
+                    "codedeploy:RegisterApplicationRevision"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "width": 116,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 116,
+        "height": 81
+      },
+      "style": {
+        "width": 116,
+        "height": 81
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-build",
+      "type": "serviceNode",
+      "position": {
+        "x": 434.7687998590679,
+        "y": 664.2076033866335
+      },
+      "data": {
+        "serviceId": "codebuild",
+        "label": "build: lint, test, scan, sign",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "buildspec": "buildspec.yml",
+          "computeType": "BUILD_GENERAL1_SMALL",
+          "privilegedMode": true
+        },
+        "iamRole": {
+          "id": "BuildServiceRole",
+          "trustPolicy": {
+            "id": "BuildServiceRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "principals": [
+                  "codebuild.amazonaws.com"
+                ],
+                "resources": [
+                  "*"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "BuildServiceRolePermissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:GetAuthorizationToken",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:PutImage",
+                    "ecr:UploadLayerPart",
+                    "secretsmanager:GetSecretValue",
+                    "ssm:GetParameters",
+                    "codeartifact:GetAuthorizationToken",
+                    "codeartifact:GetRepositoryEndpoint",
+                    "codeartifact:ReadFromRepository",
+                    "sts:GetServiceBearerToken",
+                    "signer:SignPayload",
+                    "signer:GetRevocationStatus"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-codeartifact",
+      "type": "serviceNode",
+      "position": {
+        "x": 600,
+        "y": 470
+      },
+      "data": {
+        "serviceId": "codeartifact",
+        "label": "CodeArtifact: pinned dependencies",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 115,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 115
+      },
+      "style": {
+        "width": 140,
+        "height": 115
+      }
+    },
+    {
+      "id": "node-secrets",
+      "type": "serviceNode",
+      "position": {
+        "x": 312.3676120302749,
+        "y": 815.9415358573607
+      },
+      "data": {
+        "serviceId": "secrets_manager",
+        "label": "Secrets Manager",
+        "category": "Security, Identity & Compliance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 119,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 119,
+        "height": 81
+      },
+      "style": {
+        "width": 119,
+        "height": 81
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-params",
+      "type": "serviceNode",
+      "position": {
+        "x": 627.1483773511505,
+        "y": 816.9575923577919
+      },
+      "data": {
+        "serviceId": "systems_manager",
+        "label": "Parameter Store",
+        "category": "Management & Governance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 117,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 117,
+        "height": 81
+      },
+      "style": {
+        "width": 117,
+        "height": 81
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-signer",
+      "type": "serviceNode",
+      "position": {
+        "x": 434.0721958503533,
+        "y": 1008.8160746426599
+      },
+      "data": {
+        "serviceId": "signer",
+        "label": "AWS Signer (Notation profile)",
+        "category": "Security, Identity & Compliance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "signingPlatform": "container"
+        },
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-ecr",
+      "type": "serviceNode",
+      "position": {
+        "x": 811.834444895702,
+        "y": 562.0522495314794
+      },
+      "data": {
+        "serviceId": "ecr_registry",
+        "label": "ECR: image tagged with commit SHA",
+        "category": "Containers",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-inspector",
+      "type": "serviceNode",
+      "position": {
+        "x": 814.1288920470487,
+        "y": 378.199024820977
+      },
+      "data": {
+        "serviceId": "inspector",
+        "label": "Inspector enhanced scanning",
+        "category": "Security, Identity & Compliance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-securityhub",
+      "type": "serviceNode",
+      "position": {
+        "x": 814.2329050979786,
+        "y": 211.20520608887514
+      },
+      "data": {
+        "serviceId": "security_hub",
+        "label": "Security Hub CSPM",
+        "category": "Security, Identity & Compliance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 135,
+        "height": 81,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 135,
+        "height": 81
+      },
+      "style": {
+        "width": 135,
+        "height": 81
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-deploy",
+      "type": "serviceNode",
+      "position": {
+        "x": 1030.0882650595963,
+        "y": 663.6834530286636
+      },
+      "data": {
+        "serviceId": "codedeploy",
+        "label": "orders-deployment-group (ECS)",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "computePlatform": "ECS",
+          "deploymentConfig": "CodeDeployDefault.ECSCanary10Percent5Minutes",
+          "autoRollback": true
+        },
+        "iamRole": {
+          "id": "CodeDeployServiceRole",
+          "trustPolicy": {
+            "id": "CodeDeployServiceRoleTrust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "principals": [
+                  "codedeploy.amazonaws.com"
+                ],
+                "resources": [
+                  "*"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "CodeDeployServiceRolePermissions",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "ecs:CreateTaskSet",
+                    "ecs:UpdateServicePrimaryTaskSet",
+                    "ecs:DeleteTaskSet",
+                    "elasticloadbalancing:ModifyListener",
+                    "cloudwatch:DescribeAlarms"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "width": 140,
+        "height": 115,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 115
+      },
+      "style": {
+        "width": 140,
+        "height": 115
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-alarm",
+      "type": "serviceNode",
+      "position": {
+        "x": 2113.2340193428445,
+        "y": 362.96387043078624
+      },
+      "data": {
+        "serviceId": "cloudwatch",
+        "label": "Alarm: ALB target 5XX rate",
+        "category": "Management & Governance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "customConfig": {
+          "deploymentAlarmState": "OK"
+        },
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-appconfig",
+      "type": "serviceNode",
+      "position": {
+        "x": 1961.9715841187576,
+        "y": 408.59880144454434
+      },
+      "data": {
+        "serviceId": "appconfig",
+        "label": "AppConfig feature flags",
+        "category": "Management & Governance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 98,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 98
+      },
+      "style": {
+        "width": 140,
+        "height": 98
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-cloudtrail",
+      "type": "serviceNode",
+      "position": {
+        "x": 599.291955904778,
+        "y": 1158.0817727411998
+      },
+      "data": {
+        "serviceId": "cloudtrail",
+        "label": "CloudTrail: who deployed what, when",
+        "category": "Management & Governance",
+        "health": "healthy",
+        "az": "AZ-A",
+        "subnet": "global",
+        "replicas": 1,
+        "multiAz": false,
+        "width": 140,
+        "height": 115,
+        "isSimulating": false,
+        "simulationStatus": "idle"
+      },
+      "zIndex": 10,
+      "measured": {
+        "width": 140,
+        "height": 115
+      },
+      "style": {
+        "width": 140,
+        "height": 115
+      },
+      "selected": false,
+      "dragging": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-user-alb",
+      "source": "node-user",
+      "target": "node-alb",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000,
+        "stepNumber": 1,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle",
+        "flowStepNumber": 1
+      }
+    },
+    {
+      "id": "e-alb-ecs",
+      "source": "node-alb",
+      "target": "node-ecs",
+      "type": "custom",
+      "data": {
+        "protocol": "HTTP",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 1000,
+        "stepNumber": 2,
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle",
+        "flowStepNumber": 2
+      },
+      "selected": false,
+      "sourceHandle": "bottom",
+      "targetHandle": "top"
+    },
+    {
+      "id": "e-dev-repo",
+      "source": "node-dev",
+      "target": "node-repo",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      }
+    },
+    {
+      "id": "e-repo-pipeline",
+      "source": "node-repo",
+      "target": "node-pipeline",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      }
+    },
+    {
+      "id": "e-pipeline-build",
+      "source": "node-pipeline",
+      "target": "node-build",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      }
+    },
+    {
+      "id": "e-build-deploy",
+      "source": "node-build",
+      "target": "node-deploy",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      }
+    },
+    {
+      "id": "e-build-codeartifact",
+      "source": "node-build",
+      "target": "node-codeartifact",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "selected": false,
+      "sourceHandle": "top",
+      "targetHandle": "left"
+    },
+    {
+      "id": "e-build-secrets",
+      "source": "node-build",
+      "target": "node-secrets",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "sourceHandle": "bottom",
+      "targetHandle": "right",
+      "selected": false
+    },
+    {
+      "id": "e-build-params",
+      "source": "node-build",
+      "target": "node-params",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "sourceHandle": "bottom",
+      "targetHandle": "left"
+    },
+    {
+      "id": "e-build-signer",
+      "source": "node-build",
+      "target": "node-signer",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "sourceHandle": "bottom",
+      "targetHandle": "top",
+      "selected": false
+    },
+    {
+      "id": "e-build-ecr",
+      "source": "node-build",
+      "target": "node-ecr",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "sourceHandle": "top-right",
+      "targetHandle": "left"
+    },
+    {
+      "id": "e-ecr-inspector",
+      "source": "node-ecr",
+      "target": "node-inspector",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "selected": false,
+      "sourceHandle": "top",
+      "targetHandle": "bottom"
+    },
+    {
+      "id": "e-inspector-securityhub",
+      "source": "node-inspector",
+      "target": "node-securityhub",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "selected": false,
+      "sourceHandle": "top",
+      "targetHandle": "bottom"
+    },
+    {
+      "id": "e-deploy-ecs",
+      "source": "node-deploy",
+      "target": "node-ecs",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "sourceHandle": "top",
+      "targetHandle": "left",
+      "selected": false
+    },
+    {
+      "id": "e-alb-alarm",
+      "source": "node-alb",
+      "target": "node-alarm",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "selected": false,
+      "sourceHandle": "right",
+      "targetHandle": "top"
+    },
+    {
+      "id": "e-alarm-deploy",
+      "source": "node-alarm",
+      "target": "node-deploy",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "selected": false,
+      "sourceHandle": "bottom",
+      "targetHandle": "right"
+    },
+    {
+      "id": "e-ecs-appconfig",
+      "source": "node-ecs",
+      "target": "node-appconfig",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      }
+    },
+    {
+      "id": "e-pipeline-cloudtrail",
+      "source": "node-pipeline",
+      "target": "node-cloudtrail",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "selected": false,
+      "sourceHandle": "bottom",
+      "targetHandle": "left"
+    },
+    {
+      "id": "e-deploy-cloudtrail",
+      "source": "node-deploy",
+      "target": "node-cloudtrail",
+      "type": "custom",
+      "data": {
+        "protocol": "Event",
+        "interactionType": "asynchronous",
+        "isCriticalDependency": false,
+        "timeoutMs": 1000,
+        "relationship": "manages",
+        "isSimulating": false,
+        "isFailing": false,
+        "flowStatus": "idle"
+      },
+      "selected": false,
+      "sourceHandle": "bottom",
+      "targetHandle": "right"
+    }
+  ],
+  "scenario": {
+    "id": "secure-cicd-push",
+    "name": "Developer git push",
+    "startNodeId": "node-dev",
+    "method": "POST",
+    "path": "/git-push",
+    "trafficLevel": "normal"
+  }
+}

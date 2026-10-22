@@ -1,8 +1,11 @@
+import { runServiceOperation, operationCallers } from '../serviceOperations/runner.ts';
+import { SERVICE_OPERATIONS } from '../serviceOperations/definitions.ts';
+import { runXraySubmission, xrayPublishers } from '../observability/xray.ts';
 import type { Node, Edge } from '@xyflow/react';
 import type { ServiceNodeData, SimulationScenario } from '../../types/index.ts';
 import { queueSettings, queueConsumers, evaluateConsumer } from '../messaging/sqs.ts';
-import { runPipelineExecution, resolvePipelineStages, deploymentInstances, instanceDeploymentProblems, ec2DeploymentSucceeds } from '../cicd/pipeline.ts';
-import { evaluateInternetEgress } from '../network/subnetRouting.ts';
+import { runPipelineExecution, runStandaloneDeveloperTool, resolvePipelineStages, deploymentInstances, instanceDeploymentProblems, ec2DeploymentSucceeds } from '../cicd/pipeline.ts';
+import { evaluateInternetEgress, routingOptions } from '../network/subnetRouting.ts';
 import { findContainingSubnetBoundary } from '../layout/containment.ts';
 
 /**
@@ -30,7 +33,7 @@ const DLQ_DOC = 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDev
 const VIS_DOC = 'https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html';
 
 /** SQS message lifecycle: send, delay, receive, visibility timeout, delete, retries, redrive. */
-export function sqsWalkthrough(queue: N, nodes: N[], edges: E[], whatIf: { consumerFails?: boolean } = {}, options: { assumeRouteTables?: boolean } = {}): Walkthrough {
+export function sqsWalkthrough(queue: N, nodes: N[], edges: E[], whatIf: { consumerFails?: boolean } = {}, options: { assumeRouteTables?: boolean; assumeGateways?: boolean } = {}): Walkthrough {
   const s = queueSettings(queue, nodes, edges);
   const consumer = queueConsumers(queue, nodes, edges)[0];
   const producer = edges.filter(e => e.target === queue.id).map(e => nodes.find(n => n.id === e.source)).find(n => n && n.data.serviceId !== 'sns');
@@ -110,7 +113,7 @@ export function pipelineWalkthrough(pipeline: N, nodes: N[], edges: E[], scenari
 const CONFIG_DOC = 'https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html';
 
 /** CodeDeploy rollout: batches per deployment configuration, or traffic shifting for ECS/Lambda. */
-export function codeDeployWalkthrough(deploy: N, nodes: N[], edges: E[], whatIf: { config?: string; failInstanceId?: string } = {}, options: { assumeRouteTables?: boolean } = {}): Walkthrough {
+export function codeDeployWalkthrough(deploy: N, nodes: N[], edges: E[], whatIf: { config?: string; failInstanceId?: string } = {}, options: { assumeRouteTables?: boolean; assumeGateways?: boolean } = {}): Walkthrough {
   const c = (deploy.data.customConfig ?? {}) as Record<string, any>;
   const targets = edges.filter(e => e.source === deploy.id).map(e => nodes.find(n => n.id === e.target)).filter(Boolean) as N[];
   const platform = c.computePlatform ?? (targets.some(t => ['ecs', 'fargate'].includes(t.data.serviceId)) ? 'ECS' : targets.some(t => t.data.serviceId === 'lambda') ? 'Lambda' : 'Server');
@@ -154,14 +157,14 @@ export function codeDeployWalkthrough(deploy: N, nodes: N[], edges: E[], whatIf:
 }
 
 /** For each subnet, how one of its resources reaches the internet (route table → NAT/IGW). */
-export function networkPathWalkthrough(nodes: N[], options: { assumeRouteTables?: boolean } = {}): Walkthrough {
+export function networkPathWalkthrough(nodes: N[], options: { assumeRouteTables?: boolean; assumeGateways?: boolean } = {}): Walkthrough {
   const lanes = [{ id: 'resource', label: 'Resource in subnet' }, { id: 'table', label: 'Route table' }, { id: 'nat', label: 'NAT gateway' }, { id: 'igw', label: 'Internet gateway' }, { id: 'internet', label: 'Internet' }];
   const frames: WalkthroughFrame[] = [];
   const subnets = nodes.filter(n => n.type === 'boundaryNode' && ['public_subnet', 'private_subnet'].includes(n.data.boundaryType as string));
   for (const subnet of subnets) {
     const resource = nodes.find(n => n.type === 'serviceNode' && !['nat_gateway', 'internet_gateway', 'route_tables', 's3_gateway_endpoint', 'privatelink'].includes(n.data.serviceId) && findContainingSubnetBoundary(n, nodes)?.id === subnet.id);
     if (!resource) continue;
-    const decision = evaluateInternetEgress(resource, 'internet', nodes, { assume: options.assumeRouteTables });
+    const decision = evaluateInternetEgress(resource, 'internet', nodes, routingOptions(options));
     const name = `${label(resource)} (${label(subnet)})`;
     frames.push({ lane: 'resource', title: name, status: 'info', detail: `Sends a packet to an internet address.` });
     if (decision.outcome === 'legacy') { frames.push({ lane: 'table', title: 'No VPC routing model', status: 'info', detail: 'This subnet is not inside a VPC on the canvas, so placement rules apply.' }); continue; }
@@ -177,4 +180,44 @@ export function networkPathWalkthrough(nodes: N[], options: { assumeRouteTables?
   }
   if (!frames.length) frames.push({ lane: 'resource', title: 'No subnets with resources', status: 'info', detail: 'Place resources inside subnets to see their routes.' });
   return { title: 'Internet paths by subnet', summary: `${options.assumeRouteTables === false ? 'Strict' : 'Assumed'} route tables`, lanes, frames };
+}
+
+/** Direct developer-tool explanation from the exact standalone execution engine. */
+export function standaloneDeveloperToolWalkthrough(owner: N, nodes: N[], edges: E[], scenario: SimulationScenario, whatIf: { buildFails?: boolean; config?: string; failInstanceId?: string } = {}): Walkthrough {
+  const patched = structuredClone(nodes).map(n => n.id === owner.id ? clone(n, { customConfig: { ...n.data.customConfig,
+    ...(whatIf.buildFails === undefined ? {} : { buildResult: whatIf.buildFails ? 'FAILED' : 'SUCCEEDED' }),
+    ...(whatIf.config ? { deploymentConfig: whatIf.config } : {}) } })
+    : n.id === whatIf.failInstanceId ? clone(n, { health: 'failed' }) : n);
+  const selected = patched.find(n => n.id === owner.id)!;
+  const result = runStandaloneDeveloperTool(selected, patched, edges, { ...scenario, startNodeId: owner.id });
+  const ids = [...new Set(result.steps.map(step => step.targetNodeId))];
+  return { title: `${label(owner)} operation`, summary: result.summary,
+    lanes: ids.map(id => ({ id, label: label(patched.find(n => n.id === id)) })),
+    frames: result.steps.map(step => ({ lane: step.targetNodeId, title: step.action, detail: step.explanation,
+      status: step.status === 'success' ? 'ok' : step.status === 'bypassed' ? 'info' : 'fail',
+      source: step.details?.decision?.awsRule?.match(/https?:\/\/\S+/)?.[0] })) };
+}
+
+/** X-Ray API submission walkthrough: role/route checks, per-segment results and batch response. */
+export function xrayWalkthrough(target: N, nodes: N[], edges: E[], scenario: SimulationScenario, whatIf: { publisherFails?: boolean } = {}): Walkthrough {
+  const publishers = xrayPublishers(target, nodes, edges);
+  const id = target.data.customConfig?.publisherNodeId ?? (publishers.length === 1 ? publishers[0].id : undefined);
+  const patched = structuredClone(nodes).map(n => whatIf.publisherFails && n.id === id ? clone(n, { health: 'failed' }) : n);
+  const selected = patched.find(n => n.id === target.id)!;
+  const result = runXraySubmission(selected, patched, edges, { ...scenario, startNodeId: target.id });
+  return { title: 'X-Ray segment submission', summary: result.summary,
+    lanes: [{ id: 'publisher', label: 'Publisher / credentials' }, { id: 'endpoint', label: 'X-Ray ingestion' }],
+    frames: result.steps.map(step => ({ lane: step.action.includes('route') || step.action.includes('IAM') || step.action.includes('publisher') ? 'publisher' : 'endpoint',
+      title: step.action, detail: step.explanation, status: step.status === 'failed' ? 'fail' : step.status === 'bypassed' ? 'info' : 'ok',
+      source: step.details?.decision?.awsRule?.match(/https?:\/\/\S+/)?.[0] })) };
+}
+
+export function serviceOperationWalkthrough(target:N,nodes:N[],edges:E[],scenario:SimulationScenario,whatIf:{callerFails?:boolean}={}):Walkthrough {
+  const candidates=operationCallers(target,nodes,edges);
+  const id=target.data.customConfig?.operationLab?.callerId ?? (candidates.length===1?candidates[0].id:undefined);
+  const patched=structuredClone(nodes).map(n=>whatIf.callerFails && n.id===id?clone(n,{health:'failed'}):n);
+  const selected=patched.find(n=>n.id===target.id)!;
+  const result=runServiceOperation(selected,patched,edges,{...scenario,startNodeId:target.id});
+  return {title:`${SERVICE_OPERATIONS[target.data.serviceId].name} operation`,summary:result.summary,lanes:[{id:'operation',label:'Caller → service operation'}],
+    frames:result.steps.map(step=>({lane:'operation',title:step.action,detail:step.explanation,status:step.status==='failed'?'fail':step.status==='bypassed'?'info':'ok',source:step.details?.decision?.awsRule?.match(/https?:\/\/\S+/)?.[0]}))};
 }

@@ -46,6 +46,36 @@ export const AWS_SERVICES: AWSService[] = [
   }),
 
   // ==========================================
+  // 1b. THIRD-PARTY & EXTERNAL (outside AWS; engine/architecture/externalActors.ts)
+  // ==========================================
+  createService('developer', 'Developer Workstation', 'Third-Party & External', 'Developer laptop running Git and the AWS CLI.', '#475569', 'A developer outside AWS who pushes code and calls AWS public endpoints over the internet.', {
+    inputs: [], outputs: ['HTTPS', 'HTTP', 'TCP'], commonInteractions: ['HTTPS'],
+    securityConsiderations: ['Use IAM Identity Center or short-lived credentials; grant codecommit:GitPush only on the repositories the developer works on.'],
+    teachingNotes: ['git push to CodeCommit goes to the public Git endpoint (git-codecommit.<region>.amazonaws.com) over HTTPS. It never passes through a VPC, so no internet gateway is involved.']
+  }),
+  createService('github', 'GitHub', 'Third-Party & External', 'Third-party Git hosting.', '#181717', 'Git repository hosting. CodePipeline uses it as a source through an AWS CodeConnections connection.', {
+    inputs: ['HTTPS'], outputs: ['HTTPS', 'Event'], commonInteractions: ['HTTPS', 'Event'],
+    securityConsiderations: ['The connection is authorized through the AWS Connector GitHub App; the pipeline role needs codeconnections:UseConnection.'],
+    teachingNotes: ['A push to the configured branch starts the pipeline only after the connection finished its handshake (status AVAILABLE).']
+  }),
+  createService('gitlab', 'GitLab', 'Third-Party & External', 'Third-party Git hosting.', '#FC6D26', 'Git repository hosting. CodePipeline uses GitLab.com as a source through an AWS CodeConnections connection.', {
+    inputs: ['HTTPS'], outputs: ['HTTPS', 'Event'], commonInteractions: ['HTTPS', 'Event'],
+    teachingNotes: ['CodePipeline reaches GitLab through a CodeConnections connection, like GitHub and Bitbucket Cloud.']
+  }),
+  createService('bitbucket', 'Bitbucket', 'Third-Party & External', 'Third-party Git hosting.', '#0052CC', 'Bitbucket Cloud repositories used as a CodePipeline source through an AWS CodeConnections connection.', {
+    inputs: ['HTTPS'], outputs: ['HTTPS', 'Event'], commonInteractions: ['HTTPS', 'Event'],
+    teachingNotes: ['Only Bitbucket Cloud is supported by connections; installed Bitbucket Server is not.']
+  }),
+  createService('docker_hub', 'Docker Hub', 'Third-Party & External', 'Public container image registry.', '#2496ED', 'Third-party image registry. Workloads in private subnets need NAT or internet egress to pull from it.', {
+    inputs: ['HTTPS'], outputs: ['HTTPS'], commonInteractions: ['HTTPS'],
+    teachingNotes: ['A VPC endpoint does not reach Docker Hub; only ECR has interface endpoints. Private subnets need a NAT gateway.']
+  }),
+  createService('on_premises', 'On-Premises Data Center', 'Third-Party & External', 'Corporate network outside AWS.', '#475569', 'Servers and users in a company network that reach AWS over the internet.', {
+    inputs: ['HTTPS', 'HTTP', 'TCP'], outputs: ['HTTPS', 'HTTP', 'TCP'], commonInteractions: ['HTTPS'],
+    teachingNotes: ['Modeled as an internet origin. Site-to-Site VPN and Direct Connect private paths are not simulated.']
+  }),
+
+  // ==========================================
   // 2. COMPUTE (25 services)
   // ==========================================
   createService('lambda', 'AWS Lambda', 'Compute', 'Serverless event-driven compute functions.', '#ED7100', 'Executes stateless code in response to events without server management.', {

@@ -3,8 +3,9 @@ import { TERMINATE, advanceTo } from './types.ts';
 import { evaluateEndpoint } from '../../network/vpcEndpoint.ts';
 import { resolveNatEgress } from '../../network/nat.ts';
 import { eksConfiguration } from '../../service/models/eks.ts';
-import { evaluateInternetEgress, evaluateInternetIngress, isIgwDetached, type RoutingDecision } from '../../network/subnetRouting.ts';
+import { evaluateInternetEgress, evaluateInternetIngress, isIgwDetached, type RoutingDecision, routingOptions } from '../../network/subnetRouting.ts';
 import { findContainingSubnetBoundary } from '../../layout/containment.ts';
+import { isExternalActor, isExternalTarget as reachableExternalActor } from '../../architecture/externalActors.ts';
 
 const VPC_HOSTED_INGRESS_SERVICE_IDS = ['alb', 'nlb', 'api_gateway', 'app_runner', 'ec2', 'ecs', 'fargate'];
 const INGRESS_PROXY_SERVICE_IDS = ['alb', 'nlb', 'api_gateway', 'cloudfront'];
@@ -72,7 +73,7 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   const protocol = edge?.data?.protocol || 'HTTP';
 
   // A Kubernetes ClusterIP does not become internet-facing by drawing a connection.
-  if (['user', 'client_ui', 'api_client'].includes(node.data.serviceId) && nextNode.data.serviceId === 'eks'
+  if (isExternalActor(node.data.serviceId) && nextNode.data.serviceId === 'eks'
       && eksConfiguration(nextNode.data).serviceType === 'ClusterIP') {
     const reason = 'Kubernetes ClusterIP is an internal Service endpoint. Use a separately configured ingress or load balancer for external application traffic.';
     trace.pushStep({ sourceNodeId: node.id, targetNodeId: nextNode.id, sourceNodeName: node.data.label,
@@ -88,7 +89,8 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   if (node.data.serviceId === 'cloudfront' && node.data.customConfig?.vpcOriginId) {
     const valid = node.data.customConfig.vpcOriginId === nextNode.id &&
       nextNode.data.customConfig?.scheme === 'internal' &&
-      nodes.some(n => n.data.serviceId === 'internet_gateway' && !isIgwDetached(n));
+      (nodes.some(n => n.data.serviceId === 'internet_gateway' && !isIgwDetached(n))
+        || (ctx.scenario.assumeGateways === true && !nodes.some(n => n.data.serviceId === 'internet_gateway')));
     trace.pushStep({ sourceNodeId: node.id, targetNodeId: nextNode.id,
       sourceNodeName: node.data.label, targetNodeName: nextNode.data.label,
       protocol: 'HTTPS', action: 'CloudFront VPC origin prerequisites',
@@ -104,25 +106,32 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   // Fully-managed edge/serverless services (CloudFront, Route 53, Cognito, AppSync, Lambda, S3,
   // DynamoDB, ...) are reached over the AWS backbone and never touch a customer-owned IGW, so
   // they are intentionally excluded here.
-  const isPublicOrigin = ['user', 'client_ui', 'api_client'].includes(node.data.serviceId) || node.data.subnet === 'global';
+  const isPublicOrigin = isExternalActor(node.data.serviceId) || node.data.subnet === 'global';
   const isVpcHostedPublicTarget = nextNode.data.subnet === 'public' && VPC_HOSTED_INGRESS_SERVICE_IDS.includes(nextNode.data.serviceId);
 
   // Route-table driven ingress when the target's subnet has an explicit route table.
   const inSubnet = Boolean(findContainingSubnetBoundary(nextNode, nodes));
   // Internet clients always; AWS-managed origins only toward public subnets (an internal target
   // reached through a CloudFront VPC origin or similar private integration does not use the IGW).
-  const isInternetClient = ['user', 'client_ui', 'api_client'].includes(node.data.serviceId);
+  const isInternetClient = isExternalActor(node.data.serviceId);
   const privateOrigin = node.data.serviceId === 'cloudfront' && node.data.customConfig?.vpcOriginId === nextNode.id;
   const ingress = inSubnet && !privateOrigin && VPC_HOSTED_INGRESS_SERVICE_IDS.includes(nextNode.data.serviceId)
     && (isInternetClient || (isPublicOrigin && nextNode.data.subnet === 'public'))
-    ? evaluateInternetIngress(nextNode, nodes, { assume: ctx.scenario.assumeRouteTables }) : undefined;
+    ? evaluateInternetIngress(nextNode, nodes, routingOptions(ctx.scenario)) : undefined;
   const explicitIngress = ingress && ingress.outcome !== 'legacy';
   if (explicitIngress && recordRoute(ctx, node, nextNode, ingress!, 'Route table: internet gateway')) return TERMINATE;
 
   if (!explicitIngress && isPublicOrigin && isVpcHostedPublicTarget) {
     const igw = nodes.find(n => n.data.serviceId === 'internet_gateway' && !isIgwDetached(n));
+    const assumedIgw = !igw && ctx.scenario.assumeGateways === true && !nodes.some(n => n.data.serviceId === 'internet_gateway');
 
-    if (!igw) {
+    if (assumedIgw) {
+      trace.pushStep({ sourceNodeId: node.id, targetNodeId: nextNode.id, sourceNodeName: node.data.label,
+        targetNodeName: nextNode.data.label, protocol: 'TCP', action: 'Internet gateway (assumed)', status: 'success',
+        explanation: `Assumed gateways is on: no internet gateway is drawn, so the VPC is treated as having one attached. ${nextNode.data.label} is reached through its public address. Draw an internet gateway to model attachment or failure.`,
+        targetHealth: nextNode.data.health, latencyMs: 2 });
+      trace.advanceTime(2);
+    } else if (!igw) {
       trace.pushStep({
         sourceNodeId: node.id,
         targetNodeId: nextNode.id,
@@ -144,7 +153,7 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
       return TERMINATE;
     }
 
-    if (igw.data.health === 'failed') {
+    if (igw && igw.data.health === 'failed') {
       trace.pushStep({
         sourceNodeId: node.id,
         targetNodeId: igw.id,
@@ -219,11 +228,11 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   // 7C: Outbound Egress from Private Subnet (NAT Gateway & VPC Endpoint Check)
   const isPrivateSource = (node.data.subnet === 'private' || node.data.subnet === 'isolated') &&
     !ENDPOINT_SERVICE_IDS.includes(node.data.serviceId);
-  const isExternalTarget = nextNode.data.subnet === 'global' || ['api_client', 'user'].includes(nextNode.data.serviceId);
+  const isExternalTarget = nextNode.data.subnet === 'global' || reachableExternalActor(nextNode.data.serviceId);
 
   // Route-table driven egress when the source's subnet has an explicit route table.
   const egress = isExternalTarget && !ENDPOINT_SERVICE_IDS.includes(node.data.serviceId) && !['rds'].includes(nextNode.data.serviceId)
-    ? evaluateInternetEgress(node, nextNode.data.serviceId, nodes, { assume: ctx.scenario.assumeRouteTables }) : undefined;
+    ? evaluateInternetEgress(node, nextNode.data.serviceId, nodes, routingOptions(ctx.scenario)) : undefined;
   const explicitEgress = egress && egress.outcome !== 'legacy';
   if (explicitEgress) {
     const action = egress!.via === 'interface-endpoint' ? 'Interface VPC endpoint (private DNS)' : egress!.via === 'gateway-endpoint' ? 'Route table: gateway endpoint (prefix list)'
@@ -234,8 +243,15 @@ export const networkPathAdapter = (ctx: AdapterContext): AdapterSignal => {
   if (!explicitEgress && isPrivateSource && isExternalTarget && !['rds', 'dynamodb'].includes(nextNode.data.serviceId)) {
     const vpcEndpoint = nodes.find(n => ENDPOINT_SERVICE_IDS.includes(n.data.serviceId) && evaluateEndpoint(n.data, nextNode.data.serviceId).allowed);
     const natGateway = nodes.find(n => n.data.serviceId === 'nat_gateway');
+    const assumedNat = !natGateway && ctx.scenario.assumeGateways === true;
 
-    if (vpcEndpoint && ['s3', 'dynamodb'].includes(nextNode.data.serviceId)) {
+    if (assumedNat && !(vpcEndpoint && ['s3', 'dynamodb'].includes(nextNode.data.serviceId))) {
+      trace.pushStep({ sourceNodeId: node.id, targetNodeId: nextNode.id, sourceNodeName: node.data.label,
+        targetNodeName: nextNode.data.label, protocol: 'TCP', action: 'NAT gateway (assumed)', status: 'success',
+        explanation: `Assumed gateways is on: no NAT gateway is drawn, so ${node.data.label}'s private subnet is treated as routing 0.0.0.0/0 to one (SNAT to a public address). Draw a NAT gateway to model its AZ, cost and failure.`,
+        targetHealth: 'healthy', latencyMs: 14 });
+      trace.advanceTime(14);
+    } else if (vpcEndpoint && ['s3', 'dynamodb'].includes(nextNode.data.serviceId)) {
       trace.pushStep({
         sourceNodeId: node.id,
         targetNodeId: vpcEndpoint.id,

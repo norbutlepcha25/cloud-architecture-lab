@@ -1,0 +1,108 @@
+{
+  "id": "xray-segment-ingestion",
+  "name": "X-Ray: authorized trace segment ingestion",
+  "category": "Observability & Developer Tools",
+  "difficulty": "Intermediate",
+  "description": "An explicit HTTPS PutTraceSegments call from a Lambda execution role to X-Ray. This example submits authored documents; it does not instrument unrelated application requests.",
+  "learningOutcome": "Run the reference or select X-Ray \u2192 Config \u2192 X-Ray trace ingestion \u2192 Submit trace segments. Remove role permission to see IAM denial; add an invalid segment to see HTTP 200 with unprocessed items. Use More information for the same engine decisions.",
+  "nodes": [
+    {
+      "id": "orders",
+      "type": "serviceNode",
+      "position": {
+        "x": 250,
+        "y": 180
+      },
+      "data": {
+        "serviceId": "lambda",
+        "label": "Orders publisher",
+        "category": "Compute",
+        "health": "healthy",
+        "subnet": "global",
+        "iamRole": {
+          "id": "OrdersXrayWriter",
+          "trustPolicy": {
+            "id": "trust",
+            "kind": "trust",
+            "statements": [
+              {
+                "effect": "Allow",
+                "actions": [
+                  "sts:AssumeRole"
+                ],
+                "principals": [
+                  "lambda.amazonaws.com"
+                ],
+                "resources": [
+                  "*"
+                ]
+              }
+            ]
+          },
+          "identityPolicies": [
+            {
+              "id": "trace-write",
+              "kind": "identity",
+              "statements": [
+                {
+                  "effect": "Allow",
+                  "actions": [
+                    "xray:PutTraceSegments"
+                  ],
+                  "resources": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "traces",
+      "type": "serviceNode",
+      "position": {
+        "x": 650,
+        "y": 180
+      },
+      "data": {
+        "serviceId": "xray",
+        "label": "X-Ray ingestion",
+        "category": "Developer Tools",
+        "health": "healthy",
+        "subnet": "global",
+        "customConfig": {
+          "segmentDocuments": "[\n  {\n    \"name\": \"orders\",\n    \"id\": \"0123456789abcdef\",\n    \"trace_id\": \"1-abcdef01-0123456789abcdef01234567\",\n    \"start_time\": 1800000000,\n    \"end_time\": 1800000001\n  }\n]",
+          "publisherNodeId": "orders"
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "publish-traces",
+      "type": "custom",
+      "source": "orders",
+      "target": "traces",
+      "data": {
+        "relationship": "request",
+        "protocol": "HTTPS",
+        "action": "xray:PutTraceSegments",
+        "transport": "HTTPS",
+        "interactionType": "synchronous",
+        "isCriticalDependency": true,
+        "timeoutMs": 2500,
+        "label": "PutTraceSegments (explicit API call)"
+      }
+    }
+  ],
+  "scenario": {
+    "id": "xray-reference",
+    "name": "Submit trace segments",
+    "startNodeId": "orders",
+    "method": "POST",
+    "path": "/TraceSegments",
+    "trafficLevel": "normal"
+  }
+}

@@ -74,6 +74,7 @@
 :where(html.lab-dark) .text-amber-800 { color: rgb(253 230 138); }
 :where(html.lab-dark) .text-amber-800\/90 { color: rgb(253 230 138 / 0.9); }
 :where(html.lab-dark) .text-amber-900 { color: rgb(253 230 138); }
+:where(html.lab-dark) .text-blue-700 { color: rgb(147 197 253); }
 :where(html.lab-dark) .text-blue-900 { color: rgb(191 219 254); }
 :where(html.lab-dark) .text-circuit-600 { color: rgb(63 180 184); }
 :where(html.lab-dark) .text-circuit-700 { color: rgb(116 210 212); }

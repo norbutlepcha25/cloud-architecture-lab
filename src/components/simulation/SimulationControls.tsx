@@ -101,6 +101,12 @@ export const SimulationControls: React.FC = () => {
           Assume route tables
         </label>}
 
+        {!checkOnly && <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer whitespace-nowrap" title="On: a VPC with no internet gateway drawn, or a private subnet with no NAT gateway drawn, behaves as if one existed. Drawn gateways (including failed or detached ones) still apply, and routes are not added.">
+          <input type="checkbox" checked={scenario.assumeGateways === true}
+            onChange={e => setScenario(prev => ({ ...prev, assumeGateways: e.target.checked }))} />
+          Assume gateways
+        </label>}
+
         {/* Task Flow Highlighting Toggle */}
         <button
           onClick={toggleTaskFlow}

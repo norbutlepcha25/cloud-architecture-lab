@@ -12,7 +12,8 @@ integrate with shared engines, and verify overall composition. A filename or mod
 registration alone does not establish behavioral support. Record unsupported scope.
 
 Service-by-name requests: Claude Code runs this workflow with `/aws-service <service name>`
-([.claude/skills/aws-service/SKILL.md](.claude/skills/aws-service/SKILL.md)); other agents follow that file's steps.
+([.claude/skills/aws-service/SKILL.md](.claude/skills/aws-service/SKILL.md)). Codex uses `$aws-service <service name>`
+([.agents/skills/aws-service/SKILL.md](.agents/skills/aws-service/SKILL.md)); other agents follow the shared workflow.
 
 
 ## 1. Project identity

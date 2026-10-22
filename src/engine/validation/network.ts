@@ -5,6 +5,7 @@ import { SUBNET_REQUIRED_SERVICE_IDS } from '../layout/containment.ts';
 import { validateNatGatewayPlacement } from '../network/nat.ts';
 import { requestEdges } from '../failure/dependencyGraph.ts';
 import { isIgwDetached, routingConfigurationIssues } from '../network/subnetRouting.ts';
+import { INTERNET_CLIENT_IDS } from '../architecture/externalActors.ts';
 
 const VPC_HOSTED_INGRESS_SERVICE_IDS = ['alb', 'nlb', 'ec2', 'ecs', 'fargate', 'api_gateway'];
 const ENDPOINT_SERVICE_IDS = ['privatelink', 's3_gateway_endpoint'];
@@ -85,7 +86,7 @@ export function validateNetwork(
       const target = serviceNodes.find(n => n.id === e.target);
       if (!source || !target) return false;
       const sourceIsPrivate = source.data.subnet === 'private' || source.data.subnet === 'isolated';
-      const targetIsExternal = target.data.subnet === 'global' && !['user', 'client_ui', 'api_client'].includes(target.data.serviceId);
+      const targetIsExternal = target.data.subnet === 'global' && !(INTERNET_CLIENT_IDS as readonly string[]).includes(target.data.serviceId);
       return sourceIsPrivate && targetIsExternal;
     });
     if (egressEdge) {

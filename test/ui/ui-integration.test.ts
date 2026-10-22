@@ -1388,3 +1388,131 @@ test('Metadata-only services expose no invented capacity settings; connections a
     assert.ok(document.querySelector('[aria-label="Destination port"]'));
   } finally { await h.unmount(); }
 });
+
+test('Developer tools: canvas creates executable CI/CD management links and preserves them on reconnect', async () => {
+  const h = await mount();
+  try {
+    for (const id of ['codecommit', 'codepipeline', 'codebuild', 'codedeploy', 'ec2']) {
+      await h.act(() => h.api().addServiceNode(id, { x: 2000, y: 0 }));
+    }
+    const find = (id: string) => h.api().nodes.find(n => n.data.serviceId === id)!;
+    for (const [a, b] of [['codecommit', 'codepipeline'], ['codepipeline', 'codebuild'], ['codebuild', 'codedeploy'], ['codedeploy', 'ec2']]) {
+      await h.act(() => h.api().onConnect({ source: find(a).id, target: find(b).id, sourceHandle: null, targetHandle: null }));
+      const link = h.api().edges.find(e => e.source === find(a).id && e.target === find(b).id)!;
+      assert.ok(link, `${a} -> ${b} is drawable`);
+      assert.equal(link.data?.relationship, 'manages');
+      assert.equal(link.data?.isCriticalDependency, false);
+    }
+    assert.equal(h.api().edges.length, 4);
+    const link = h.api().edges.find(e => e.source === find('codepipeline').id)!;
+    await h.act(() => h.api().onReconnect(link, { source: find('codepipeline').id, target: find('codedeploy').id, sourceHandle: null, targetHandle: null }));
+    assert.equal(h.api().edges.find(e => e.id === link.id)?.target, find('codedeploy').id);
+  } finally { await h.unmount(); }
+});
+
+test('Third-party actors: drawn developer -> CodeCommit link pushes from the inspector; IAM preset denies', async () => {
+  const h = await mount(true);
+  const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === text)!;
+  try {
+    await h.act(() => h.api().addServiceNode('codecommit', { x: 2300, y: 0 }));
+    const repo = h.api().selectedNode!;
+    await h.act(() => h.api().addServiceNode('developer', { x: 2000, y: 0 }));
+    const developer = h.api().selectedNode!;
+    assert.equal(developer.data.subnet, 'global');
+    assert.equal(developer.data.category, 'Third-Party & External');
+    await h.act(() => h.api().onConnect({ source: developer.id, target: repo.id, sourceHandle: null, targetHandle: null }));
+    assert.equal(h.api().edges.find(e => e.source === developer.id)?.data?.relationship, 'manages');
+    await h.act(() => button('Config').click());
+    await h.act(() => button('Git push').click());
+    await h.act(() => button('git push').click());
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.kind, 'workflow');
+    assert.equal(h.api().simulationResult?.success, true, h.api().simulationResult?.summary);
+    const select = [...document.querySelectorAll<HTMLSelectElement>('select')].find(s => [...s.options].some(o => o.value === 'read-only'))!;
+    await h.act(() => { select.value = 'read-only'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })); });
+    assert.equal(h.api().nodes.find(n => n.id === developer.id)?.data.customConfig?.iamPolicy, 'read-only');
+    await h.act(() => button('git push').click());
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.statusCode, 403);
+  } finally { await h.unmount(); }
+});
+
+test('Developer tools: Start build and Create deployment execute selected services without changing the saved request start', async () => {
+  const h = await mount(true);
+  const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === text)!;
+  const serviceRole = (principal: string): any => ({ id: principal, trustPolicy: { id: 't', kind: 'trust', statements: [{ effect: 'Allow', actions: ['sts:AssumeRole'], principals: [principal], resources: ['*'] }] }, identityPolicies: [{ id: 'p', kind: 'identity', statements: [{ effect: 'Allow', actions: ['*'], resources: ['*'] }] }] });
+  try {
+    await h.act(() => h.api().addServiceNode('codebuild', { x: 2000, y: 0 }));
+    const build = h.api().selectedNode!;
+    await h.act(() => {
+      h.api().updateNodeData(build.id, { iamRole: serviceRole('codebuild.amazonaws.com'), customConfig: { sourceType: 'NO_SOURCE', buildspec: 'version: 0.2\nphases:\n  build:\n    commands: [echo hello]' } });
+      h.api().setScenario(s => ({ ...s, startNodeId: 'saved-start' }));
+    });
+    await h.act(() => button('Config').click());
+    await h.act(() => button('Build project').click());
+    assert.ok(button('Start build'));
+    await h.act(() => button('Start build').click());
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.kind, 'workflow');
+    assert.equal(h.api().simulationResult?.success, true, h.api().simulationResult?.summary);
+    assert.equal(h.api().scenario.startNodeId, 'saved-start');
+    await h.act(() => h.api().addServiceNode('codedeploy', { x: 2300, y: 0 }));
+    const deploy = h.api().selectedNode!;
+    await h.act(() => h.api().updateNodeData(deploy.id, { iamRole: serviceRole('codedeploy.amazonaws.com') }));
+    await h.act(() => button('Config').click());
+    await h.act(() => button('Deployment group').click());
+    assert.ok(button('Create deployment'));
+    await h.act(() => button('Create deployment').click());
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.kind, 'workflow');
+    assert.equal(h.api().simulationResult?.statusCode, 400);
+    assert.match(h.api().simulationResult!.summary, /revision bucket/);
+    assert.ok(!h.api().simulationResult?.steps.some(s => s.action === 'Unsupported service execution'));
+    assert.equal(h.api().scenario.startNodeId, 'saved-start');
+  } finally { await h.unmount(); }
+});
+
+test('X-Ray: draw/reconnect publisher links, submit from the inspector, retain configuration/runtime through draft reload', async () => {
+  const { buildRole } = await import('../../src/engine/iam/roleBuilder.ts');
+  const h = await mount(true);
+  const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === text)!;
+  try {
+    await h.act(() => h.api().addServiceNode('lambda', { x: 2000, y: 0 }));
+    const publisher = h.api().selectedNode!;
+    await h.act(() => h.api().addServiceNode('lambda', { x: 2400, y: 0 }));
+    const other = h.api().selectedNode!;
+    await h.act(() => h.api().addServiceNode('xray', { x: 2800, y: 0 }));
+    const xray = h.api().selectedNode!;
+    await h.act(() => h.api().onConnect({ source: publisher.id, target: xray.id, sourceHandle: null, targetHandle: null }));
+    let link = h.api().edges.find(e => e.target === xray.id)!;
+    assert.ok(link, 'the supported HTTPS connection can be drawn');
+    assert.equal(link.data?.protocol, 'HTTPS');
+    await h.act(() => h.api().onReconnect(link, { source: other.id, target: xray.id, sourceHandle: null, targetHandle: null }));
+    link = h.api().edges.find(e => e.id === link.id)!;
+    assert.equal(link.source, other.id);
+    await h.act(() => {
+      h.api().updateNodeData(other.id, { iamRole: buildRole('lambda', 'xray-writer', [{ target: xray, actions: ['xray:PutTraceSegments'] }]) });
+      h.api().setScenario(s => ({ ...s, startNodeId: publisher.id }));
+    });
+    await h.act(() => button('Config').click());
+    const accordion = button('X-Ray trace ingestion');
+    assert.equal(accordion.getAttribute('aria-expanded'), 'false');
+    await h.act(() => accordion.click());
+    await h.act(() => button('Load sample segment').click());
+    const sample = h.api().nodes.find(n => n.id === xray.id)!.data.customConfig!.segmentDocuments;
+    await h.act(() => button('Submit trace segments').click());
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.statusCode, 200, h.api().simulationResult?.summary);
+    assert.match(document.querySelector('[aria-label="X-Ray ingestion state"]')!.textContent!, /Stored segments: 1/);
+    assert.equal(h.api().scenario.startNodeId, publisher.id, 'run action preserves saved request start');
+    await h.act(() => button('X-Ray trace ingestion').click());
+    await h.act(() => button('X-Ray trace ingestion').click());
+    assert.equal(h.api().nodes.find(n => n.id === xray.id)!.data.customConfig!.segmentDocuments, sample);
+    const exported = h.api().exportDraft();
+    await h.act(() => h.api().importDraft(exported));
+    const restored = h.api().nodes.find(n => n.id === xray.id)!;
+    assert.equal(restored.data.customConfig!.segmentDocuments, sample);
+    assert.equal(restored.data.customConfig!.serviceRuntime.records.length, 1);
+    assert.equal(h.api().edges.find(e => e.id === link.id)?.source, other.id);
+  } finally { await h.unmount(); }
+});

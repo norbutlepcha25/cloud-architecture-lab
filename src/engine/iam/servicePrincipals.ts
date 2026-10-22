@@ -21,7 +21,9 @@ const SERVICE_PRINCIPALS: Record<string, string> = {
   lambda: 'lambda.amazonaws.com',
   codepipeline: 'codepipeline.amazonaws.com',
   codebuild: 'codebuild.amazonaws.com',
-  codedeploy: 'codedeploy.amazonaws.com'
+  codedeploy: 'codedeploy.amazonaws.com',
+  // Rule execution role: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-targets.html
+  eventbridge: 'events.amazonaws.com'
 };
 
 export function servicePrincipalFor(serviceId: string): string {

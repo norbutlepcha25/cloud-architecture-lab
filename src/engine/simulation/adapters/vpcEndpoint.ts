@@ -2,7 +2,7 @@ import type { AdapterContext, AdapterSignal } from './types.ts';
 import { CONTINUE, TERMINATE, advanceTo } from './types.ts';
 
 import { evaluateEndpoint, isVpcEndpoint } from '../../network/vpcEndpoint.ts';
-import { evaluateGatewayEndpointAssociation } from '../../network/subnetRouting.ts';
+import { evaluateGatewayEndpointAssociation, routingOptions } from '../../network/subnetRouting.ts';
 
 const ENDPOINT_SERVICE_IDS = ['s3_gateway_endpoint', 'privatelink'];
 
@@ -41,7 +41,7 @@ export const vpcEndpointAdapter = (ctx: AdapterContext): AdapterSignal => {
   // With an explicit route table, a gateway endpoint is reachable only from subnets whose route
   // table is associated with it (that association is what adds the prefix-list route).
   if (isGatewayEndpoint) {
-    const association = evaluateGatewayEndpointAssociation(node, endpointTarget, ctx.nodes, { assume: ctx.scenario.assumeRouteTables });
+    const association = evaluateGatewayEndpointAssociation(node, endpointTarget, ctx.nodes, routingOptions(ctx.scenario));
     if (association.outcome !== 'legacy' && association.outcome !== 'allowed') {
       trace.pushStep({ sourceNodeId: node.id, targetNodeId: endpointTarget.id,
         sourceNodeName: node.data.label, targetNodeName: endpointTarget.data.label,

@@ -1,5 +1,6 @@
 export type ServiceCategory =
   | 'Client / Ingress'
+  | 'Third-Party & External'
   | 'Compute'
   | 'Storage'
   | 'Databases'
@@ -195,6 +196,8 @@ export interface SimulationStep {
     /** A logical application response is not proof of reverse packet evaluation. */
     returnPathEvaluated?: boolean;
     returnsToNodeId?: string;
+    /** Service-operation lab response recorded by engine/serviceOperations/runner.ts. */
+    operationResponse?: unknown;
   };
 }
 
@@ -209,6 +212,9 @@ export interface SimulationScenario {
   /** Subnets with no route table association behave like a standard public/private setup.
    *  false = they get only the VPC local route (AWS main route table of a new VPC). Default true. */
   assumeRouteTables?: boolean;
+  /** Simulator convenience: VPCs without a drawn internet gateway, and generated private tables
+   *  without a drawn NAT gateway, behave as if one existed. Drawn gateways always win. Default false. */
+  assumeGateways?: boolean;
 }
 
 export type SimulationResultKind = 'request' | 'configuration-check' | 'authorization-check' | 'workflow';

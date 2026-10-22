@@ -1,3 +1,6 @@
+import { ServiceOperationPanel } from './ServiceOperationPanel.tsx';
+import { SERVICE_OPERATIONS } from '../../engine/serviceOperations/definitions.ts';
+import { XrayPanel } from './XrayPanel.tsx';
 import { LambdaConfigurationPanel } from './LambdaConfigurationPanel.tsx';
 import { DatabaseConfigurationPanel } from './DatabaseConfigurationPanel.tsx';
 import { S3ConfigurationPanel } from './S3ConfigurationPanel.tsx';
@@ -9,12 +12,12 @@ import { COMPASS_POINTS, compassHandleId } from '../../utils/compassHandles.ts';
 import { eksComponent } from '../../data/eksComponents.ts';
 import { EksComponentPanel } from './EksComponentPanel.tsx';
 import { AsgPanel } from './AsgPanel.tsx';
-import { checkConnection, connectionProtocols, connectionOperations } from '../../engine/architecture/connectionContracts.ts';
+import { checkConnection, cicdRelationship, connectionProtocols, connectionOperations } from '../../engine/architecture/connectionContracts.ts';
 import { ManagedServicePanel } from './ManagedServicePanel.tsx';
 import { Ec2IamRolePanel, ROLE_PANEL_SERVICE_IDS } from './Ec2IamRolePanel.tsx';
 import { RouteTablePanel } from './RouteTablePanel.tsx';
 import { InternetGatewayPanel } from './InternetGatewayPanel.tsx';
-import { CodePipelinePanel, CodeCommitPanel, CodeBuildPanel, CodeDeployPanel, CicdRolePanel, CICD_ROLE_SERVICE_IDS } from './CicdPanels.tsx';
+import { CodePipelinePanel, CodeCommitPanel, DeveloperPanel, GitProviderPanel, EventRulePanel, SignerPanel, CodeBuildPanel, CodeDeployPanel, CicdRolePanel, CICD_ROLE_SERVICE_IDS } from './CicdPanels.tsx';
 import { createTeachingNacl } from '../../engine/network/naclPreset.ts';
 import { NetworkIdentityPanel } from './NetworkIdentityPanel.tsx';
 import { relationshipKind, type RelationshipKind } from '../../engine/architecture/relationships.ts';
@@ -107,6 +110,7 @@ export const ServiceInspector: React.FC = () => {
   if (selectedEdge && !selectedNode) {
     const sourceNode = nodes.find(n => n.id === selectedEdge.source);
     const targetNode = nodes.find(n => n.id === selectedEdge.target);
+    const cicd = cicdRelationship(sourceNode, targetNode);
     const edgeData = selectedEdge.data || { protocol: 'HTTP', interactionType: 'synchronous', timeoutMs: 2500 };
     const endpointSide = (end: 'source' | 'target') => {
       return <label className="block text-xs font-semibold text-slate-700">{end === 'source' ? 'Source side' : 'Target side'}
@@ -260,8 +264,8 @@ export const ServiceInspector: React.FC = () => {
               onChange={(e) => updateEdgeData(selectedEdge.id, { protocol: e.target.value as ProtocolType })}
               className="w-full px-3 py-1.5 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:outline-none focus:border-circuit-600 font-mono"
             >
-              {!(['manages', 'authorization'].includes(relationshipKind(selectedEdge.data)) ? [selectedEdge.data?.referenceAnnotation ? edgeData.protocol : 'Event'] : connectionProtocols(sourceNode, targetNode)).includes(edgeData.protocol) && <option value={edgeData.protocol}>Unsupported: {edgeData.protocol}</option>}
-              {(['manages', 'authorization'].includes(relationshipKind(selectedEdge.data)) ? [selectedEdge.data?.referenceAnnotation ? edgeData.protocol : 'Event'] : connectionProtocols(sourceNode, targetNode)).map(protocol => <option key={protocol} value={protocol}>{protocol}</option>)}
+              {!(!cicd && ['manages', 'authorization'].includes(relationshipKind(selectedEdge.data)) ? [selectedEdge.data?.referenceAnnotation ? edgeData.protocol : 'Event'] : connectionProtocols(sourceNode, targetNode)).includes(edgeData.protocol) && <option value={edgeData.protocol}>Unsupported: {edgeData.protocol}</option>}
+              {(!cicd && ['manages', 'authorization'].includes(relationshipKind(selectedEdge.data)) ? [selectedEdge.data?.referenceAnnotation ? edgeData.protocol : 'Event'] : connectionProtocols(sourceNode, targetNode)).map(protocol => <option key={protocol} value={protocol}>{protocol}</option>)}
             </select>
           </div>
 
@@ -269,6 +273,7 @@ export const ServiceInspector: React.FC = () => {
           <p className="text-xs text-slate-500">Transport: {['HTTP', 'HTTPS', 'TCP'].includes(edgeData.protocol) ? edgeData.protocol : edgeData.protocol === 'DNS' ? 'UDP' : ['SQL', 'gRPC'].includes(edgeData.protocol) ? 'TCP' : 'HTTPS'}</p>
           <div className="grid grid-cols-2 gap-2">{endpointSide('source')}{endpointSide('target')}</div>
           <p className="text-xs text-slate-500">Drag either end of the selected edge onto another connection dot, or choose its side here. Export saves the changes.</p>
+          {!cicd && <>
           <label className="block text-xs">Destination port (optional)
             <input aria-label="Destination port" type="number" min={1} max={65535} step={1}
               className="block border rounded p-2 w-full" value={selectedEdge.data?.destinationPort ?? ''}
@@ -281,6 +286,7 @@ export const ServiceInspector: React.FC = () => {
               {connectionOperations(targetNode).map(action => <option key={action}>{action}</option>)}
             </select>
           </label>
+          </>}
           <label className="block text-xs font-semibold text-slate-700">
             Connection meaning
             <select className="block w-full border rounded p-2 mt-1" value={relationshipKind(selectedEdge.data)}
@@ -292,7 +298,7 @@ export const ServiceInspector: React.FC = () => {
               <option value="route-association">Route association</option>
               <option value="target-registration">Target registration</option>
             </select>
-            <span className="block font-normal text-slate-500 mt-1">Structural relationships do not carry requests. Management lines illustrate relationships; they do not execute Kubernetes operations or configure scaling policies.</span>
+            <span className="block font-normal text-slate-500 mt-1">{cicd ? 'CI/CD relationships configure the pipeline workflow. Run the pipeline to evaluate its actions, permissions and dependencies.' : 'Structural relationships do not carry requests. Management lines illustrate relationships; they do not execute Kubernetes operations or configure scaling policies.'}</span>
           </label>
 
           {/* Coupling Mode */}
@@ -1490,10 +1496,16 @@ export const ServiceInspector: React.FC = () => {
             {/* SERVICE-SPECIFIC AWS CONFIGURATION (EC2, S3, RDS, etc.) */}
             {/* ---------------------------------------------------- */}
             {activeLabReference?.configurationChecks && nodeData.customConfig && <InspectorAccordion title="Course configuration"><LabConfigurationPanel key={selectedNode.id} config={nodeData.customConfig} onChange={customConfig => updateNodeData(selectedNode.id, { customConfig })} /></InspectorAccordion>}
+            {SERVICE_OPERATIONS[nodeData.serviceId] && <InspectorAccordion title="Service operation lab"><ServiceOperationPanel node={selectedNode} nodes={nodes} edges={edges} result={simulationResult} onConfig={patch=>updateNodeData(selectedNode.id,{customConfig:{...nodeData.customConfig,...patch}})} onRun={()=>runFromNode(selectedNode.id)}/></InspectorAccordion>}
+            {profile.configuration === 'xray' && <InspectorAccordion title="X-Ray trace ingestion"><XrayPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
             {profile.configuration === 'pipeline' && <InspectorAccordion title="Pipeline"><CodePipelinePanel node={selectedNode} nodes={nodes} edges={edges} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
             {profile.configuration === 'repo' && <InspectorAccordion title="Repository"><CodeCommitPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
-            {profile.configuration === 'build' && <InspectorAccordion title="Build project"><CodeBuildPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
-            {profile.configuration === 'deploy' && <InspectorAccordion title="Deployment group"><CodeDeployPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onInstance={(id, patch) => { const target = nodes.find(n => n.id === id); updateNodeData(id, { customConfig: { ...(target?.data as any)?.customConfig, ...patch } }); }} /></InspectorAccordion>}
+            {nodeData.serviceId === 'eventbridge' && <InspectorAccordion title="Rule: CodeCommit events"><EventRulePanel node={selectedNode} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
+            {profile.configuration === 'signer' && <InspectorAccordion title="Signing"><SignerPanel node={selectedNode} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
+            {profile.configuration === 'developer' && <InspectorAccordion title="Git push"><DeveloperPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
+            {profile.configuration === 'gitprovider' && <InspectorAccordion title="Repository connection"><GitProviderPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
+            {profile.configuration === 'build' && <InspectorAccordion title="Build project"><CodeBuildPanel onRun={() => runFromNode(selectedNode.id)} node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
+            {profile.configuration === 'deploy' && <InspectorAccordion title="Deployment group"><CodeDeployPanel onRun={() => runFromNode(selectedNode.id)} node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onInstance={(id, patch) => { const target = nodes.find(n => n.id === id); updateNodeData(id, { customConfig: { ...(target?.data as any)?.customConfig, ...patch } }); }} /></InspectorAccordion>}
             {CICD_ROLE_SERVICE_IDS.includes(nodeData.serviceId) && <InspectorAccordion title="Service role"><CicdRolePanel node={selectedNode} onRole={iamRole => updateNodeData(selectedNode.id, { iamRole })} /></InspectorAccordion>}
             {profile.configuration === 'igw' && <InspectorAccordion title="Internet gateway attachment"><InternetGatewayPanel key={selectedNode.id} node={selectedNode} nodes={nodes} onChange={patch => updateNodeData(selectedNode.id, patch)} /></InspectorAccordion>}
             {profile.configuration === 'routes' && <InspectorAccordion title="Routes and subnet associations"><RouteTablePanel key={selectedNode.id} node={selectedNode} nodes={nodes} onRoutes={routes => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, routeTable: { ...(nodeData.customConfig?.routeTable ?? {}), routes } } })} onAssociate={(subnetId, routeTableId) => { const subnet = nodes.find(n => n.id === subnetId); const identity = { ...(subnet?.data as any)?.networkIdentity }; if (routeTableId) identity.routeTableId = routeTableId; else delete identity.routeTableId; updateNodeData(subnetId, { networkIdentity: identity } as any); }} /></InspectorAccordion>}

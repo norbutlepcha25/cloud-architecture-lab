@@ -33,7 +33,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Cloud Financial Management': '#15803D',
   'Blockchain & Quantum': '#4338CA',
   'Robotics & Satellite': '#0F766E',
-  'Client / Ingress': '#232F3E'
+  'Client / Ingress': '#232F3E',
+  'Third-Party & External': '#475569'
 };
 
 interface BoundaryDef {
