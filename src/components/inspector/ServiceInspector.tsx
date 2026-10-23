@@ -1055,10 +1055,10 @@ export const ServiceInspector: React.FC = () => {
 
   return (
     <aside className="w-80 bg-white border-l border-slate-200 flex flex-col h-full flex-shrink-0 z-20 shadow-md overflow-hidden">
-      {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'ecs' && <EcsExplorer key={selectedNode.id} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
-      {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'eks' && <EksExplorer key={selectedNode.id} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
-      {serviceExplorerNodeId === selectedNode.id && WALKTHROUGH_SERVICES.includes(nodeData.serviceId) && <WalkthroughExplorer key={selectedNode.id} node={selectedNode} nodes={nodes} edges={edges} scenario={scenario} onClose={() => setServiceExplorerNodeId(null)} />}
-      {!nodeData.customConfig?.canvasScalingDemo && serviceExplorerNodeId === selectedNode.id && BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId) && <ServiceBehaviorExplorer key={selectedNode.id} node={selectedNode} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
+      {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'ecs' && <EcsExplorer key={`ecs-${selectedNode.id}`} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
+      {serviceExplorerNodeId === selectedNode.id && nodeData.serviceId === 'eks' && <EksExplorer key={`eks-${selectedNode.id}`} nodeId={selectedNode.id} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
+      {serviceExplorerNodeId === selectedNode.id && WALKTHROUGH_SERVICES.includes(nodeData.serviceId) && <WalkthroughExplorer key={`walkthrough-${selectedNode.id}`} node={selectedNode} nodes={nodes} edges={edges} scenario={scenario} onClose={() => setServiceExplorerNodeId(null)} />}
+      {!nodeData.customConfig?.canvasScalingDemo && serviceExplorerNodeId === selectedNode.id && BEHAVIOR_EXPLORER_SERVICES.includes(nodeData.serviceId) && <ServiceBehaviorExplorer key={`behavior-${selectedNode.id}`} node={selectedNode} nodes={nodes} edges={edges} onUpdate={updateNodeData} onClose={() => setServiceExplorerNodeId(null)} />}
       {/* Header */}
       <div className="p-4 border-b border-slate-200 bg-white">
         <div className="flex items-start justify-between gap-2">

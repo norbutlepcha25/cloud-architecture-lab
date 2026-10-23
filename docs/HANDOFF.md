@@ -1,5 +1,13 @@
 # Handoff — live project state
 
+## Duplicate-key dialog bug fixed; CI green — 2026-10-23
+
+The long-standing UI failure ("Service lessons ... RunTask", expected /ECR repository/) was a real bug:
+WalkthroughExplorer and ServiceBehaviorExplorer are siblings in ServiceInspector and both used
+key={selectedNode.id}. Services with both (EventBridge, CloudWatch) produced duplicate React keys, so
+the walkthrough dialog stayed mounted after selecting another service. Explorers now use prefixed keys.
+npm test: 708/708 engine + 51/51 UI; build passes. PR #22 (feature branch → main) opened.
+
 ## Amplify Hosting continuous deployment on push — 2026-10-23
 
 User asked why a push did not trigger Amplify. Cause: Amplify was only a generic HTTPS endpoint; no
