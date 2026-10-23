@@ -1,7 +1,7 @@
 # AWS CodePipeline — codepipeline
 
 Status: VERIFIED FOR LISTED OPERATIONS. Verified does not mean full AWS fidelity.
-Last reviewed: 2026-10-17. Implementation: src/engine/cicd/pipeline.ts (shared with CodeCommit,
+Last reviewed: 2026-10-18. Implementation: src/engine/cicd/pipeline.ts (shared with CodeCommit,
 CodeBuild, CodeDeploy); dispatch in src/engine/simulation/liveSimulation.ts; UI
 src/components/inspector/CicdPanels.tsx.
 
@@ -17,7 +17,7 @@ cross-account actions, parallel runOrder, triggers/filters, execution modes, tim
 
 | Field | Default | Effect |
 | --- | --- | --- |
-| `customConfig.pipeline.stages[]` (`{name, actions:[{name, category, provider, nodeId, inputArtifacts, outputArtifacts}]}`) | derived from canvas: sources → pipeline, pipeline → CodeBuild, pipeline/build → CodeDeploy or ECS | behavior |
+| `customConfig.pipeline.stages[]` (`{name, actions:[{name, category, provider, nodeId, inputArtifacts, outputArtifacts, primarySource?}]}`) | derived from canvas: sources → pipeline, pipeline → CodeBuild, pipeline/build → CodeDeploy or ECS | behavior |
 | `iamRole` (service role, trusted by codepipeline.amazonaws.com) | none = permissions reported NOT_EVALUATED | behavior |
 | pipeline → S3 edge | artifact store; none = AWS-created default bucket (not drawn) | descriptive |
 
@@ -38,7 +38,7 @@ UNKNOWN / not enforced: "source actions only in the first stage" (not stated in 
 
 ## Relationships
 
-Control-plane only (`connectionContracts.ts` CICD_PAIRS): CodeCommit/S3/ECR → pipeline (source),
+Control-plane only (`architecture/cicdRelationships.ts` CICD_PAIRS): CodeCommit/S3/ECR → pipeline (source),
 pipeline → CodeBuild / CodeDeploy / ECS (actions), pipeline → S3 (artifact store), IAM → pipeline
 (role illustration). Never a request hop.
 
@@ -56,3 +56,53 @@ permissions per action, cross-Region actions.
 
 More information on a pipeline, repository or build project shows the execution stage by stage
 (pipelineWalkthrough, built from runPipelineExecution) with a "build fails" what-if.
+
+## Connection consistency increment — 2026-10-18
+
+Canvas-created developer-tool relationships use `relationship: manages` and an Event teaching
+label. Legacy HTTPS links are normalized only in the live execution copy, preserving persistence.
+Neither label represents an application forwarding hop. Port/API-operation controls do not apply.
+Annotations (`referenceAnnotation`), response lines, authorization illustrations, dependency calls,
+and incompatible protocols cannot discover actions, select deployment targets, request image
+pushes, or trigger pipelines. IAM drawing lines still grant no permissions.
+
+Derived deployments connected to a particular build consume that build's artifact; ECS image
+names are evaluated from the consumed artifact's producer. Where no producer is specified,
+legacy derivation still uses the first build by stable resource ID. Use explicit stages for
+multiple sources/producers or more complex ordering; canvas edges are an educational shorthand,
+not the complete AWS pipeline definition. Existing multi-step walkthroughs reuse this engine.
+
+Official sources checked 2026-10-18:
+- [Artifact flow and matching](https://docs.aws.amazon.com/codepipeline/latest/userguide/welcome-introducing-artifacts.html).
+- [Per-provider artifact counts](https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-action-artifacts.html):
+  modeled sources produce one; CodeBuild accepts 1–5 inputs and 0–5 outputs; modeled deploy actions consume one.
+- [CodeBuild action](https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CodeBuild.html):
+  multiple inputs require `primarySource`, naming an input artifact.
+- [Deployment groups](https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-groups.html):
+  deployment targets/load balancers are configured deployment relationships.
+
+Evidence: `test/devtools-connections.test.ts` (legacy compatibility, excluded links, producer
+selection, live/lab equivalence, immutability, reorder invariance, ECS failure/recovery),
+`tests/aws-conformance/devtools/connections.test.ts` (CICD-ARTIFACT-COUNT-001,
+CICD-PRIMARY-001, CICD-SOURCE-COUNT-001), and the developer-tools canvas/reconnection UI test.
+Existing CI/CD conformance tests retain IAM denial, VPC network denial and target failure coverage.
+Artifact configuration checks do not execute network/IAM calls; those cases are inapplicable there.
+
+Scope remains partial: detailed trigger filters,
+artifact-store permissions/health, full target-group/listener configuration and fan-out to all
+pipelines from one source run remain unmodeled. `runLiveSimulation` selects one connected pipeline
+by stable ID; a source connection alone is not a model of all AWS event configuration.
+
+Standalone entry points now run bounded StartBuild/CreateDeployment operations; see
+[CodeBuild](codebuild.md#standalone-startbuild--2026-10-18) and
+[CodeDeploy](codedeploy.md#standalone-createdeployment--2026-10-18).
+Existing pipeline actions retain compatibility, including missing-role NOT_EVALUATED traces;
+standalone runs require their own service role. No synthetic pipeline role is introduced.
+
+## CodeStarSourceConnection source — 2026-10-22
+
+GitHub, GitLab and Bitbucket nodes connected to a pipeline become `CodeStarSourceConnection`
+source actions (valid Source provider). The source requires connection status AVAILABLE and a
+service role allowing `codeconnections:UseConnection` and `codestar-connections:UseConnection` on
+the connection ARN (missing role stays NOT_EVALUATED, as for other actions). Pushes respect
+DetectChanges and BranchName. Spec: [external_actors.md](external_actors.md). Tests: CONN-SRC-*.

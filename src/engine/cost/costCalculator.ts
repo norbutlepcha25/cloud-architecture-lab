@@ -1,5 +1,6 @@
 import type { Node } from '@xyflow/react';
 import type { ServiceNodeData, ServiceCategory } from '../../types/index.ts';
+import { INTERNET_CLIENT_IDS, THIRD_PARTY_ACTOR_IDS } from '../architecture/externalActors.ts';
 
 export interface LineItem {
   name: string;
@@ -521,7 +522,7 @@ const PRICING_MODULE_ENTRIES: { serviceIds: string[]; module: PricingModule }[] 
   { serviceIds: ['eks'], module: eksModule },
   { serviceIds: ['elasticache'], module: elastiCacheModule },
   { serviceIds: ['waf'], module: wafModule },
-  { serviceIds: ['user', 'client_ui', 'api_client'], module: freeClientModule },
+  { serviceIds: [...INTERNET_CLIENT_IDS, ...THIRD_PARTY_ACTOR_IDS], module: freeClientModule },
   { serviceIds: ['internet_gateway'], module: freeInternetGatewayModule },
   { serviceIds: ['s3_gateway_endpoint'], module: freeVpcEndpointModule }
 ];

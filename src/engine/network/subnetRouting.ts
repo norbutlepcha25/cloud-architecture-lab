@@ -27,6 +27,10 @@ import { endpointService } from './vpcEndpoint.ts';
  * - assume = false (strict): the subnet uses the VPC main route table, which in a new VPC has only
  *   the local route, so it has no internet, NAT or gateway endpoint path.
  * Resources that are not inside any subnet keep the legacy placement rules.
+ * assumeGateways = true (simulator convenience, default off): a VPC with no internet gateway node
+ * drawn behaves as if one were attached, and a generated private table with no NAT gateway drawn
+ * routes to an assumed NAT gateway. It never adds routes and never overrides a drawn gateway, so
+ * a drawn gateway that is failed or not attached still blocks traffic.
  * Assumptions: resources in a subnet with an internet gateway route have a public IPv4 address
  * (or are internet-facing load balancers); IPv6 and egress-only gateways are not modeled.
  */
@@ -75,7 +79,21 @@ export function routeTableIdFor(resource: Node<any>, nodes: Node<any>[]): string
   return resource.data?.networkIdentity?.routeTableId ?? associatedTableId(findContainingSubnetBoundary(resource, nodes));
 }
 
-export interface RoutingOptions { assume?: boolean }
+export interface RoutingOptions { assume?: boolean; assumeGateways?: boolean }
+
+/** Scenario toggles -> routing options, shared by every caller of this module. */
+export function routingOptions(scenario: { assumeRouteTables?: boolean; assumeGateways?: boolean } = {}): RoutingOptions {
+  return { assume: scenario.assumeRouteTables, assumeGateways: scenario.assumeGateways === true };
+}
+
+const IMPLICIT_PREFIX = 'implicit:';
+const IMPLICIT_NAT_ID = `${IMPLICIT_PREFIX}nat`;
+function implicitGateway(kind: 'internet_gateway' | 'nat_gateway', vpc: Node<any> | null): Node<any> {
+  const what = kind === 'internet_gateway' ? 'internet gateway' : 'NAT gateway';
+  return { id: `${IMPLICIT_PREFIX}${kind}:${vpc?.id ?? 'vpc'}`, position: { x: 0, y: 0 },
+    data: { serviceId: kind, health: 'healthy', label: `the assumed ${what} of ${vpc?.data?.label ?? 'the VPC'} (not drawn)` } } as Node<any>;
+}
+const isImplicit = (node: Node<any>) => node.id.startsWith(IMPLICIT_PREFIX);
 
 const ASSUMED_PREFIX = 'assumed:';
 
@@ -108,7 +126,7 @@ function governingTable(resource: Node<any>, nodes: Node<any>[], options: Routin
     && findContainingVpc(findContainingSubnetBoundary(n, nodes)!, nodes)?.id === vpc.id);
   const nat = nats.find(n => n.data.az && n.data.az === resource.data?.az) ?? nats[0];
   return syntheticTable(`${ASSUMED_PREFIX}${subnet.id}`, `the assumed private route table of ${subnet.data.label ?? subnet.id}`,
-    nat ? [local, { destinationCidr: '0.0.0.0/0', target: { type: 'nat', targetId: nat.id } }] : [local]);
+    nat || options.assumeGateways ? [local, { destinationCidr: '0.0.0.0/0', target: { type: 'nat', targetId: nat?.id ?? IMPLICIT_NAT_ID } }] : [local]);
 }
 
 /** Gateway endpoint association: explicit list, or (generated tables only) never configured. */
@@ -169,10 +187,13 @@ function igwAttached(igw: Node<any>, vpc: Node<any> | null, nodes: Node<any>[]):
   return Boolean(vpc) && igwAttachedVpc(igw, nodes)?.id === vpc!.id;
 }
 
-function resolveIgw(route: Route, vpc: Node<any> | null, nodes: Node<any>[]): Node<any> | string {
+function resolveIgw(route: Route, vpc: Node<any> | null, nodes: Node<any>[], options: RoutingOptions = {}): Node<any> | string {
   const candidates = route.target.targetId
     ? nodes.filter(n => n.id === route.target.targetId)
     : nodes.filter(n => n.data?.serviceId === 'internet_gateway' && igwAttached(n, vpc, nodes));
+  // Only when nothing is drawn for this VPC: a drawn IGW that is failed or not attached keeps blocking.
+  const drawnForVpc = nodes.some(n => n.data?.serviceId === 'internet_gateway' && (isIgwDetached(n) || igwAttachedVpc(n, nodes)?.id === vpc?.id));
+  if (!candidates.length && !route.target.targetId && options.assumeGateways && vpc && !drawnForVpc) return implicitGateway('internet_gateway', vpc);
   const igw = candidates[0];
   if (!igw || igw.data?.serviceId !== 'internet_gateway') return route.target.targetId
     ? `Route target ${route.target.targetId} is not an internet gateway.`
@@ -201,9 +222,9 @@ export function evaluateInternetIngress(target: Node<any>, nodes: Node<any>[], o
     return { outcome: 'denied', routeTableId: tableId, privateSubnet: true,
       reason: `${label} ${where}, so ${target.data.label} is in a private subnet and cannot be reached from the internet.` };
   }
-  const igw = resolveIgw(route, vpcOf(target, nodes), nodes);
+  const igw = resolveIgw(route, vpcOf(target, nodes), nodes, options);
   if (typeof igw === 'string') return { outcome: 'denied', routeTableId: tableId, reason: `${label}: ${igw}` };
-  return { outcome: 'allowed', via: 'igw', hopNodeId: igw.id, routeTableId: tableId,
+  return { outcome: 'allowed', via: 'igw', hopNodeId: isImplicit(igw) ? undefined : igw.id, routeTableId: tableId,
     reason: `${label} routes ${route.destinationCidr} to ${igw.data.label}, which is attached to the VPC. Internet clients can reach ${target.data.label} through its public address.` };
 }
 
@@ -260,13 +281,20 @@ export function evaluateInternetEgress(source: Node<any>, destinationService: st
   if (!route) return { outcome: 'denied', routeTableId: tableId, reason: `${label} has no route for internet traffic. Packets from ${source.data.label} are dropped.` };
 
   if (route.target.type === 'igw') {
-    const igw = resolveIgw(route, vpcOf(source, nodes), nodes);
+    const igw = resolveIgw(route, vpcOf(source, nodes), nodes, options);
     if (typeof igw === 'string') return { outcome: 'denied', routeTableId: tableId, reason: `${label}: ${igw}` };
-    return { outcome: 'allowed', via: 'igw', hopNodeId: igw.id, routeTableId: tableId,
+    return { outcome: 'allowed', via: 'igw', hopNodeId: isImplicit(igw) ? undefined : igw.id, routeTableId: tableId,
       reason: `${label} routes ${route.destinationCidr} to ${igw.data.label}. ${source.data.label} leaves through it using its public address.` };
   }
 
   if (route.target.type === 'nat') {
+    if (route.target.targetId === IMPLICIT_NAT_ID) {
+      const vpc = vpcOf(source, nodes);
+      const igw = resolveIgw({ destinationCidr: '0.0.0.0/0', target: { type: 'igw' } }, vpc, nodes, options);
+      if (typeof igw === 'string') return { outcome: 'denied', routeTableId: tableId, reason: `${label} routes to an assumed NAT gateway, but its public subnet has no internet path: ${igw}` };
+      return { outcome: 'allowed', via: 'nat', routeTableId: tableId,
+        reason: `${label} routes ${route.destinationCidr} to ${implicitGateway('nat_gateway', vpc).data.label}, which translates the private source address (SNAT) and leaves through ${igw.data.label}. Assumed gateways is on; draw a NAT gateway to model its AZ, cost and failure.` };
+    }
     const nat = route.target.targetId ? nodes.find(n => n.id === route.target.targetId) : undefined;
     if (!nat || nat.data?.serviceId !== 'nat_gateway') return { outcome: 'denied', routeTableId: tableId, reason: `${label} points at a NAT gateway that does not exist on the canvas.` };
     if (nat.data.health === 'failed') return { outcome: 'denied', routeTableId: tableId, reason: `${label} sends internet traffic to ${nat.data.label}, which is unavailable.` };

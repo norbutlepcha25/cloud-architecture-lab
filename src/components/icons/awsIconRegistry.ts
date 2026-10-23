@@ -17,6 +17,12 @@ for (const [path, url] of Object.entries(svgModules)) {
 
 // Map service ID to official SVG filename
 const SERVICE_ID_TO_SVG_FILE: Record<string, string> = {
+  // Third-party brands (Simple Icons, CC0 1.0: https://simpleicons.org). Trademarks belong to their owners.
+  'github': 'third-party-github.svg',
+  'gitlab': 'third-party-gitlab.svg',
+  'bitbucket': 'third-party-bitbucket.svg',
+  'docker_hub': 'third-party-docker.svg',
+
   // Compute
   'ec2': 'amazon-ec2.svg',
   'lambda': 'aws-lambda.svg',

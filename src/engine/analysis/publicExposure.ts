@@ -4,6 +4,7 @@ import { makeFinding, type Finding } from '../findings.ts';
 import { getAttachedSecurityGroups } from '../layout/containment.ts';
 import { parseCidr } from '../network/cidr.ts';
 import { requestEdges } from '../failure/dependencyGraph.ts';
+import { isExternalActor } from '../architecture/externalActors.ts';
 
 const DATA_TIER_SERVICE_IDS = ['rds', 'aurora', 'dynamodb', 'elasticache'];
 
@@ -67,7 +68,7 @@ export function detectPublicExposure(
     const source = serviceNodes.find(n => n.id === edge.source);
     const target = serviceNodes.find(n => n.id === edge.target);
     if (!source || !target) continue;
-    if (['user', 'client_ui', 'api_client'].includes(source.data.serviceId) && DATA_TIER_SERVICE_IDS.includes(target.data.serviceId)) {
+    if (isExternalActor(source.data.serviceId) && DATA_TIER_SERVICE_IDS.includes(target.data.serviceId)) {
       findings.push(makeFinding('architecture', 'public_exposure', {
         severity: 'CRITICAL',
         resource: target.data.label,

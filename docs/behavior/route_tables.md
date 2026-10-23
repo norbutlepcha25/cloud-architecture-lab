@@ -124,3 +124,17 @@ explicit field.
 
 More information on a route table, NAT gateway or internet gateway shows each subnet's internet path
 (networkPathWalkthrough) with a strict-routing what-if.
+
+## Assume gateways toggle — 2026-10-22
+
+`scenario.assumeGateways` (simulation bar "Assume gateways", default off) is a simulator
+convenience, not AWS behavior. When on: a VPC with no internet gateway drawn for it behaves as if
+one were attached; a generated (assumed) private table with no NAT gateway drawn routes 0.0.0.0/0
+to an assumed NAT; legacy out-of-subnet paths and the CloudFront VPC-origin prerequisite accept
+the missing IGW. It never adds routes (explicit or strict main tables keep their routes), never
+overrides a drawn gateway (failed or not-attached gateways still block) and never makes a private
+subnet reachable from the internet. Traces label the gateway "assumed (not drawn)". Implementation:
+subnetRouting.ts `routingOptions` / `implicitGateway`, networkPath.ts legacy branches. Every caller
+of subnetRouting now passes `routingOptions(scenario)`. Configuration validation findings
+(validation/network.ts) still report a missing IGW/NAT: they describe the drawn architecture.
+Tests: tests/aws-conformance/networking/assumed-gateways.test.ts (AGW-*, 11 cases).

@@ -17,6 +17,7 @@
  * `dataTierInteraction.ts`, `vpcEndpoint.ts`, `networkPath.ts` (read in full for this audit).
  */
 export const LIVE_ADAPTER_SERVICE_IDS = [
+  'xray', // xray.ts: explicit API submission only
   'cloudwatch', 'cloudtrail', // managedServices.ts (bounded operation model)
   'waf',                                            // perimeterInspection.ts
   'ec2', 'ecs', 'eks', 'lambda', 'fargate', 'app_runner',  // computeCapacity.ts (COMPUTE_SERVICE_IDS)
@@ -28,7 +29,8 @@ export const LIVE_ADAPTER_SERVICE_IDS = [
   's3_gateway_endpoint', 'privatelink',              // vpcEndpoint.ts
   'internet_gateway',                                // networkPath.ts (IGW attachment check)
   'sns', 'eventbridge', 'step_functions',            // networkPath.ts (MANAGED_EVENT_TARGET_SERVICE_IDS)
-  'user', 'client_ui', 'api_client'                  // networkPath.ts (isPublicOrigin) - request originators
+  'user', 'client_ui', 'api_client',                 // networkPath.ts (isPublicOrigin) - request originators
+  'developer', 'github', 'gitlab', 'bitbucket'       // cicd/gitPush.ts - Git push and CodeConnections source
 ];
 
 /**
@@ -39,10 +41,11 @@ export const LIVE_ADAPTER_SERVICE_IDS = [
  * entry names the test(s) that back it.
  */
 export const REQUEST_SIMULATION_EVIDENCE: Record<string, string> = {
-  codepipeline: 'tests/aws-conformance/devtools/cicd.test.ts CP-RUN-001, CP-STOP-001, CP-IAM-001 - pipeline execution (workflow result, engine/cicd/pipeline.ts)',
+  xray: 'tests/aws-conformance/observability/xray.test.ts XRAY-PUT-001, XRAY-PARTIAL-001, XRAY-IAM-001, XRAY-UPDATE-001 - bounded root-segment ingestion through live publisher and selected X-Ray entry points; no sampling/query/service-map coverage',
+  codepipeline: 'tests/aws-conformance/devtools/cicd.test.ts CP-RUN-001, CP-STOP-001, CP-IAM-001 - pipeline execution (workflow result, engine/cicd/pipeline.ts); tests/aws-conformance/devtools/connections.test.ts - artifact cardinality and PrimarySource; test/devtools-connections.test.ts - live connection semantics',
   codecommit: 'tests/aws-conformance/devtools/cicd.test.ts CP-RUN-001 - push starts the connected pipeline (source action)',
-  codebuild: 'tests/aws-conformance/devtools/cicd.test.ts CB-DOCKER-001, CB-VPC-001 - build action within a pipeline execution',
-  codedeploy: 'tests/aws-conformance/devtools/cicd.test.ts CD-CONFIG-001, CD-LIVE-001, CD-AGENT-001, CD-ECS-NLB-001 - deployment action within a pipeline execution',
+  codebuild: 'tests/aws-conformance/devtools/cicd.test.ts CB-DOCKER-001, CB-VPC-001 - build action within a pipeline execution; tests/aws-conformance/devtools/standalone.test.ts CB-STANDALONE-* - standalone StartBuild; tests/aws-conformance/devtools/connections.test.ts - artifact counts and PrimarySource',
+  codedeploy: 'tests/aws-conformance/devtools/cicd.test.ts CD-CONFIG-001, CD-LIVE-001, CD-AGENT-001, CD-ECS-NLB-001 - deployment action within a pipeline execution; tests/aws-conformance/devtools/standalone.test.ts CD-STANDALONE-* - standalone CreateDeployment',
   cloudwatch: 'test/managed-services.test.ts: live single-period alarm evaluation',
   cloudtrail: 'test/managed-services.test.ts: live audit event selection',
   sns: 'test/managed-services.test.ts: live SNS fanout to permitted queues',
@@ -66,7 +69,11 @@ export const REQUEST_SIMULATION_EVIDENCE: Record<string, string> = {
   privatelink: 'test/engine.test.ts (VPC Gateway/Interface Endpoint routing scenarios)',
   user: 'every test that calls runSimulation with a user/client_ui start node (the overwhelming majority of test/engine.test.ts)',
   client_ui: 'shares the same start-node resolution path as "user" in requestSimulator.ts',
-  api_client: 'shares the same start-node resolution path as "user" in requestSimulator.ts'
+  api_client: 'shares the same start-node resolution path as "user" in requestSimulator.ts',
+  developer: 'tests/aws-conformance/devtools/git-push.test.ts GIT-PUSH-001/002 - git push to CodeCommit (workflow result, engine/cicd/gitPush.ts); repository contents not simulated',
+  github: 'tests/aws-conformance/devtools/git-push.test.ts CONN-SRC-001/005 - push starts a CodeStarSourceConnection pipeline source',
+  gitlab: 'tests/aws-conformance/devtools/git-push.test.ts CONN-SRC-002 - PENDING connection does not trigger (shared provider path with github)',
+  bitbucket: 'tests/aws-conformance/devtools/git-push.test.ts CONN-SRC-006 - push succeeds, DetectChanges=false does not start the pipeline; CONN-SRC-003 PENDING manual-run failure'
 };
 
 /**

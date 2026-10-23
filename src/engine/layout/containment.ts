@@ -61,7 +61,7 @@ export function rectArea(rect: Rect): number {
 export const SUBNET_REQUIRED_SERVICE_IDS = [
   'alb', 'nlb', 'elb', 'app_runner',
   'ec2', 'ecs', 'fargate',
-  'rds', 'aurora', 'elasticache',
+  'rds', 'aurora', 'elasticache', 'neptune', 'redshift',
   'privatelink'
 ];
 

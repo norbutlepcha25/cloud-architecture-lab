@@ -72,3 +72,18 @@ test('WALK-NET-001: internet paths come from the route engine (NAT for private s
   const strict = networkPathWalkthrough(ref.nodes, { assumeRouteTables: false });
   assert.ok(strict.frames.some(f => f.lane === 'table' && f.status === 'fail'));
 });
+
+test('standalone developer-tool walkthrough records the same execution decisions and leaves inputs unchanged', async () => {
+  const { standaloneDeveloperToolWalkthrough } = await import('../src/engine/explain/walkthrough.ts');
+  const { runStandaloneDeveloperTool } = await import('../src/engine/cicd/pipeline.ts');
+  const owner: any = { id: 'build-alone', type: 'serviceNode', position: { x: 2000, y: 0 }, data: { serviceId: 'codebuild', label: 'Build', health: 'healthy', customConfig: { sourceType: 'NO_SOURCE', buildspec: 'version: 0.2\nphases:\n  build:\n    commands: [echo hello]' }, iamRole: { id: 'build-role', trustPolicy: { id: 't', kind: 'trust', statements: [{ effect: 'Allow', actions: ['sts:AssumeRole'], principals: ['codebuild.amazonaws.com'], resources: ['*'] }] }, identityPolicies: [{ id: 'p', kind: 'identity', statements: [{ effect: 'Allow', actions: ['logs:*'], resources: ['*'] }] }] } } };
+  const scenario: any = { id: 's', startNodeId: owner.id };
+  const before = structuredClone(owner);
+  const result = runStandaloneDeveloperTool(owner, [owner], [], scenario);
+  const walkthrough = standaloneDeveloperToolWalkthrough(owner, [owner], [], scenario);
+  assert.deepEqual(walkthrough.frames.map(f => f.detail), result.steps.map(s => s.explanation));
+  assert.equal(walkthrough.summary, result.summary);
+  const failed = standaloneDeveloperToolWalkthrough(owner, [owner], [], scenario, { buildFails: true });
+  assert.ok(failed.frames.some(f => f.status === 'fail'));
+  assert.deepEqual(owner, before);
+});

@@ -15,6 +15,7 @@ import {
   isNetworkInfraNode
 } from './dependencyGraph.ts';
 import { checkRedundancy } from './redundancy.ts';
+import { INTERNET_CLIENT_IDS } from '../architecture/externalActors.ts';
 
 function generateId(): string {
   const g: any = globalThis as any;
@@ -165,7 +166,7 @@ function resolveNatFailureBlockedEdges(
       const target = findNode(nodes, e.target);
       if (!source || !target) return false;
       const sourceIsPrivate = source.data.subnet === 'private' || source.data.subnet === 'isolated';
-      const targetIsExternal = target.data.subnet === 'global' && !['user', 'client_ui', 'api_client'].includes(target.data.serviceId);
+      const targetIsExternal = target.data.subnet === 'global' && !(INTERNET_CLIENT_IDS as readonly string[]).includes(target.data.serviceId);
       return sourceIsPrivate && targetIsExternal;
     })
     .map(e => e.id);

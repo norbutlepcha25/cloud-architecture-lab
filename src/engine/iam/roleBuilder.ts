@@ -1,3 +1,4 @@
+import { carriesRequest } from '../architecture/relationships.ts';
 import type { Node, Edge } from '@xyflow/react';
 import type { ServiceNodeData } from '../../types/index.ts';
 import type { PolicyStatement } from './types.ts';
@@ -11,12 +12,14 @@ import { servicePrincipalFor } from './servicePrincipals.ts';
  * (https://docs.aws.amazon.com/service-authorization/latest/reference/reference_policies_actions-resources-contextkeys.html).
  */
 export const SERVICE_ACTIONS: Record<string, string[]> = {
+  kinesis: ['kinesis:PutRecord'], eventbridge: ['events:PutEvents'], cloudwatch: ['cloudwatch:PutMetricData'], acm: ['acm:DescribeCertificate'],
+  xray: ['xray:PutTraceSegments'],
   s3: ['s3:GetObject', 's3:PutObject', 's3:ListBucket', 's3:DeleteObject'],
   dynamodb: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:Query', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem'],
   sqs: ['sqs:SendMessage', 'sqs:ReceiveMessage', 'sqs:DeleteMessage', 'sqs:GetQueueAttributes'],
   sns: ['sns:Publish'],
   lambda: ['lambda:InvokeFunction'],
-  kms: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
+  kms: ['kms:DescribeKey', 'kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
   secrets_manager: ['secretsmanager:GetSecretValue']
 };
 
@@ -26,6 +29,11 @@ const S3_OBJECT_ACTIONS = ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'];
 
 /** The ARN a target is authorized against - shared with engine/iam/applicationHop.ts. */
 export function targetResourceArn(target: Node<any>): string {
+  if (target.data?.serviceId === 'cloudwatch' && target.data?.customConfig?.operationLab) return '*';
+  if (target.data?.serviceId === 'acm' && target.data?.customConfig?.operationLab) {
+    try { const raw = target.data.customConfig.operationLab.resource; const resource = typeof raw === 'string' ? JSON.parse(raw) : raw; if (resource?.CertificateArn) return resource.CertificateArn; } catch { /* invalid config is handled by the service validator */ }
+  }
+  if (target.data?.serviceId === 'xray') return '*'; // PutTraceSegments has no resource-level ARN.
   return String(target.data?.customConfig?.resourceArn || `arn:aws:${target.data?.serviceId}:::${target.id}`);
 }
 
@@ -51,9 +59,12 @@ export function calledServices(source: Node<ServiceNodeData>, nodes: Node<Servic
       const target = byId.get(edge.target);
       if (!target) continue;
       const serviceId = target.data.serviceId;
+      if (serviceId === 'xray' && (!carriesRequest(edge.data) || edge.data?.referenceAnnotation || edge.data?.protocol !== 'HTTPS')) continue;
       if (TRANSPARENT_HOPS.includes(serviceId) && depth < 2) { visit(target.id, depth + 1); continue; }
-      if (!IAM_AUTHENTICATED_ACTIONS[serviceId]) continue;
-      const action = (edge.data?.action as string | undefined) ?? IAM_AUTHENTICATED_ACTIONS[serviceId];
+      const operation = target.data.customConfig?.operationLab?.action;
+      const defaultAction = operation && SERVICE_ACTIONS[serviceId]?.includes(operation) ? operation : IAM_AUTHENTICATED_ACTIONS[serviceId];
+      if (!defaultAction) continue;
+      const action = (edge.data?.action as string | undefined) ?? defaultAction;
       const entry = found.get(target.id) ?? { target, used: [], available: SERVICE_ACTIONS[serviceId] ?? [IAM_AUTHENTICATED_ACTIONS[serviceId]] };
       if (!entry.used.includes(action)) entry.used.push(action);
       found.set(target.id, entry);

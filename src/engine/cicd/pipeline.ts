@@ -1,11 +1,14 @@
+import { isCicdWorkflowLink } from '../architecture/cicdRelationships.ts';
 import type { Node, Edge } from '@xyflow/react';
 import type { ServiceNodeData, ConnectionData, SimulationScenario, SimulationResult, SimulationStep } from '../../types/index.ts';
 import type { TraceEntry } from '../trace/types.ts';
 import { assumeRole } from '../iam/roleAssumption.ts';
 import { evaluateAuthorization } from '../iam/evaluate.ts';
 import { normalizeTrustPolicy, servicePrincipalFor } from '../iam/servicePrincipals.ts';
-import { evaluateInternetEgress } from '../network/subnetRouting.ts';
+import { evaluateInternetEgress, routingOptions } from '../network/subnetRouting.ts';
 import { findContainingSubnetBoundary } from '../layout/containment.ts';
+import { CONNECTION_GIT_PROVIDERS, isConnectionGitProvider } from '../architecture/externalActors.ts';
+import { isIntegrationLink, serviceIntegration } from '../architecture/serviceIntegrations.ts';
 
 /**
  * CI/CD workflow behavior for AWS CodeCommit, CodeBuild, CodeDeploy and CodePipeline.
@@ -21,7 +24,7 @@ type N = Node<ServiceNodeData>;
 type E = Edge<ConnectionData>;
 
 export type ActionCategory = 'Source' | 'Build' | 'Test' | 'Deploy';
-export type ActionProvider = 'CodeCommit' | 'S3' | 'ECR' | 'CodeBuild' | 'CodeDeploy' | 'ECS';
+export type ActionProvider = 'CodeCommit' | 'S3' | 'ECR' | 'CodeStarSourceConnection' | 'CodeBuild' | 'CodeDeploy' | 'ECS';
 
 export interface PipelineAction {
   name: string;
@@ -30,19 +33,20 @@ export interface PipelineAction {
   nodeId: string;
   inputArtifacts: string[];
   outputArtifacts: string[];
+  primarySource?: string;
 }
 export interface PipelineStage { name: string; actions: PipelineAction[] }
 
 /** Valid providers per category (CodePipeline "Valid action providers"), limited to modeled ones. */
 export const VALID_PROVIDERS: Record<ActionCategory, ActionProvider[]> = {
-  Source: ['CodeCommit', 'S3', 'ECR'],
+  Source: ['CodeCommit', 'S3', 'ECR', 'CodeStarSourceConnection'],
   Build: ['CodeBuild'],
   Test: ['CodeBuild'],
   Deploy: ['CodeDeploy', 'ECS']
 };
 
 const PROVIDER_SERVICE: Record<ActionProvider, string[]> = {
-  CodeCommit: ['codecommit'], S3: ['s3'], ECR: ['ecr_registry'], CodeBuild: ['codebuild'],
+  CodeCommit: ['codecommit'], S3: ['s3'], ECR: ['ecr_registry'], CodeStarSourceConnection: Object.keys(CONNECTION_GIT_PROVIDERS), CodeBuild: ['codebuild'],
   CodeDeploy: ['codedeploy'], ECS: ['ecs', 'fargate']
 };
 
@@ -51,6 +55,8 @@ export const PIPELINE_ROLE_ACTIONS: Record<ActionProvider, string[]> = {
   CodeCommit: ['codecommit:GetBranch', 'codecommit:GetCommit', 'codecommit:UploadArchive', 'codecommit:GetUploadArchiveStatus'],
   S3: ['s3:GetObject', 's3:GetObjectVersion'],
   ECR: ['ecr:DescribeImages'],
+  /** Both prefixes are required (action reference, "Service role permissions"). */
+  CodeStarSourceConnection: ['codeconnections:UseConnection', 'codestar-connections:UseConnection'],
   CodeBuild: ['codebuild:StartBuild', 'codebuild:BatchGetBuilds'],
   CodeDeploy: ['codedeploy:CreateDeployment', 'codedeploy:GetDeployment', 'codedeploy:GetDeploymentConfig', 'codedeploy:GetApplicationRevision', 'codedeploy:RegisterApplicationRevision'],
   ECS: ['ecs:DescribeServices', 'ecs:RegisterTaskDefinition', 'ecs:UpdateService', 'iam:PassRole']
@@ -65,6 +71,11 @@ export const LAMBDA_DEPLOYMENT_CONFIGS = ['CodeDeployDefault.LambdaAllAtOnce', '
 
 const cfg = (node: N | undefined): Record<string, any> => (node?.data.customConfig ?? {}) as Record<string, any>;
 const sid = (node: N | undefined) => node?.data.serviceId;
+/** Only actual CI/CD relationships participate in workflow discovery and dependencies. */
+function workflowEdges(nodes: N[], edges: E[]): E[] {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  return edges.filter(e => isCicdWorkflowLink(byId.get(e.source), byId.get(e.target), e.data));
+}
 const label = (node: N | undefined) => String(node?.data.label ?? node?.id ?? 'unknown');
 
 /** EC2 instances an Auto Scaling group or deployment group reaches. */
@@ -78,13 +89,15 @@ function instancesOf(target: N, nodes: N[]): N[] {
 
 /** Stages from explicit `customConfig.pipeline.stages`, otherwise derived from canvas relationships. */
 export function resolvePipelineStages(pipeline: N, nodes: N[], edges: E[]): PipelineStage[] {
+  edges = workflowEdges(nodes, edges);
+  edges = [...edges].sort((a, b) => a.target.localeCompare(b.target) || a.source.localeCompare(b.source));
   const explicit = cfg(pipeline).pipeline?.stages;
   if (Array.isArray(explicit) && explicit.length && typeof explicit[0] === 'object') return explicit as PipelineStage[];
 
   const byId = new Map(nodes.map(n => [n.id, n]));
   const into = edges.filter(e => e.target === pipeline.id).map(e => byId.get(e.source)).filter(Boolean) as N[];
   const from = edges.filter(e => e.source === pipeline.id).map(e => byId.get(e.target)).filter(Boolean) as N[];
-  const sources = into.filter(n => ['codecommit', 's3', 'ecr_registry'].includes(sid(n)!));
+  const sources = into.filter(n => ['codecommit', 's3', 'ecr_registry'].includes(sid(n)!) || isConnectionGitProvider(sid(n)));
   const builds = from.filter(n => sid(n) === 'codebuild');
   const deployTargets = [
     ...from.filter(n => ['codedeploy', 'ecs', 'fargate'].includes(sid(n)!)),
@@ -95,7 +108,7 @@ export function resolvePipelineStages(pipeline: N, nodes: N[], edges: E[]): Pipe
   const sourceOut = sources.map((_, i) => i === 0 ? 'SourceArtifact' : `SourceArtifact${i + 1}`);
   if (sources.length) stages.push({ name: 'Source', actions: sources.map((n, i) => ({
     name: label(n).replace(/[^A-Za-z0-9.@_-]/g, '-'), category: 'Source',
-    provider: sid(n) === 'codecommit' ? 'CodeCommit' : sid(n) === 's3' ? 'S3' : 'ECR',
+    provider: sid(n) === 'codecommit' ? 'CodeCommit' : sid(n) === 's3' ? 'S3' : isConnectionGitProvider(sid(n)) ? 'CodeStarSourceConnection' : 'ECR',
     nodeId: n.id, inputArtifacts: [], outputArtifacts: [sourceOut[i]]
   })) });
   if (builds.length) stages.push({ name: 'Build', actions: builds.map((n, i) => ({
@@ -105,7 +118,10 @@ export function resolvePipelineStages(pipeline: N, nodes: N[], edges: E[]): Pipe
   if (deployTargets.length) stages.push({ name: 'Deploy', actions: deployTargets.map(n => ({
     name: label(n).replace(/[^A-Za-z0-9.@_-]/g, '-'), category: 'Deploy',
     provider: sid(n) === 'codedeploy' ? 'CodeDeploy' : 'ECS', nodeId: n.id,
-    inputArtifacts: builds.length ? ['BuildArtifact'] : sourceOut.length ? [sourceOut[0]] : [], outputArtifacts: []
+    inputArtifacts: builds.length ? [(() => {
+      const producer = builds.findIndex(b => edges.some(e => e.source === b.id && e.target === n.id));
+      return producer > 0 ? `BuildArtifact${producer + 1}` : 'BuildArtifact';
+    })()] : sourceOut.length ? [sourceOut[0]] : [], outputArtifacts: []
   })) });
   return stages;
 }
@@ -131,8 +147,22 @@ export function validatePipelineStructure(stages: PipelineStage[], nodes: N[]): 
         issues.push({ problem: `${action.name}: ${action.provider} is not a valid ${action.category} provider.`, rule: 'Each action category has a fixed set of valid providers.', source: 'https://docs.aws.amazon.com/codepipeline/latest/userguide/actions-valid-providers.html' });
       }
       const node = nodes.find(n => n.id === action.nodeId);
-      if (!node || !PROVIDER_SERVICE[action.provider].includes(sid(node)!)) {
+      if (!node || !PROVIDER_SERVICE[action.provider]?.includes(sid(node)!)) {
         issues.push({ problem: `${action.name}: the ${action.provider} resource is missing.`, rule: 'An action must reference an existing resource of its provider type.', source: actionRef });
+      }
+      const artifactRef = 'https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-action-artifacts.html';
+      const inputCount = action.inputArtifacts.length, outputCount = action.outputArtifacts.length;
+      if ((action.category === 'Source' && outputCount !== 1)
+        || (action.provider === 'CodeBuild' && (inputCount < 1 || inputCount > 5 || outputCount > 5))
+        || (action.category === 'Deploy' && inputCount !== 1)) {
+        issues.push({ problem: `${action.name}: invalid artifact count (${inputCount} input, ${outputCount} output).`,
+          rule: 'Modeled source actions produce one artifact; CodeBuild consumes 1–5 and produces 0–5; modeled deploy actions consume one.', source: artifactRef });
+      }
+      if (action.provider === 'CodeBuild' && ((inputCount > 1 && !action.primarySource)
+        || (action.primarySource !== undefined && !action.inputArtifacts.includes(action.primarySource)))) {
+        issues.push({ problem: `${action.name}: PrimarySource must identify an input artifact when multiple sources are used.`,
+          rule: 'CodeBuild requires PrimarySource for multiple inputs; it must name an input artifact.',
+          source: 'https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CodeBuild.html' });
       }
       if (action.category === 'Source' && action.inputArtifacts.length) issues.push({ problem: `${action.name} has input artifacts.`, rule: 'Source actions do not have input artifacts.', source: actionRef });
       if (action.category === 'Deploy' && action.outputArtifacts.length) issues.push({ problem: `${action.name} has output artifacts.`, rule: 'Deploy actions do not have output artifacts.', source: actionRef });
@@ -217,22 +247,33 @@ function sourceAction(run: Run, pipeline: N, action: PipelineAction, node: N): b
     run.push(node, 'Source: S3', true, `Read ${c.sourceKey ?? c.objectKey} (latest version) from ${label(node)} as ${action.outputArtifacts.join(', ')}.`);
     return true;
   }
+  if (action.provider === 'CodeStarSourceConnection') {
+    const c = cfg(node), ref = 'https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-CodestarConnectionSource.html';
+    const status = connectionStatus(node);
+    if (status !== 'AVAILABLE') {
+      run.push(node, 'Source: CodeStarSourceConnection', false, `The ${CONNECTION_GIT_PROVIDERS[sid(node)!]} connection is ${status}. A connection must finish the installation handshake (AVAILABLE) before a pipeline can use it.`, { component: 'Service', awsRule: ref });
+      return false;
+    }
+    if (!roleStep(run, pipeline, PIPELINE_ROLE_ACTIONS.CodeStarSourceConnection, 'Source', connectionArn(node))) return false;
+    run.push(node, 'Source: CodeStarSourceConnection', true, `Fetched branch ${c.branch ?? 'main'} of ${c.fullRepositoryId ?? 'owner/repo'} from ${label(node)} as ${action.outputArtifacts.join(', ')} (CODE_ZIP).`, { awsRule: ref });
+    return true;
+  }
   if (!roleStep(run, pipeline, PIPELINE_ROLE_ACTIONS[action.provider], 'Source')) return false;
   const detail = action.provider === 'CodeCommit' ? `branch ${cfg(node).branch ?? 'main'}` : `image tag ${cfg(node).imageTag ?? 'latest'}`;
   run.push(node, `Source: ${action.provider}`, true, `Fetched ${detail} from ${label(node)} as ${action.outputArtifacts.join(', ')}.`);
   return true;
 }
 
-function buildAction(run: Run, pipeline: N, action: PipelineAction, build: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean }): boolean {
+function buildAction(run: Run, pipeline: N | undefined, action: PipelineAction, build: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean; assumeGateways?: boolean; projectActions?: string[]; drawnEdges?: E[] }): boolean {
   if (build.data.health === 'failed') { run.push(build, 'Build: CodeBuild', false, `${label(build)} is unavailable.`); return false; }
-  if (!roleStep(run, pipeline, PIPELINE_ROLE_ACTIONS.CodeBuild, 'Build (start)')) return false;
+  if (pipeline && !roleStep(run, pipeline, PIPELINE_ROLE_ACTIONS.CodeBuild, 'Build (start)')) return false;
   const c = cfg(build);
   const pushes = c.pushesImage === true || edges.some(e => e.source === build.id && sid(nodes.find(n => n.id === e.target)) === 'ecr_registry');
-  if (!roleStep(run, build, pushes ? [...CODEBUILD_ROLE_ACTIONS, ...CODEBUILD_ECR_PUSH_ACTIONS] : CODEBUILD_ROLE_ACTIONS, 'Build (project)')) return false;
+  if (!roleStep(run, build, [...(options.projectActions ?? CODEBUILD_ROLE_ACTIONS), ...(pushes ? CODEBUILD_ECR_PUSH_ACTIONS : [])], 'Build (project)')) return false;
 
   // Builds in a VPC reach public endpoints only through NAT: CodeBuild ENIs never get public IPs.
   if (findContainingSubnetBoundary(build, nodes)) {
-    const egress = evaluateInternetEgress(build, 'internet', nodes, { assume: options.assumeRouteTables });
+    const egress = evaluateInternetEgress(build, 'internet', nodes, routingOptions(options));
     const ok = egress.outcome === 'legacy' || (egress.outcome === 'allowed' && egress.via === 'nat');
     const reason = egress.outcome === 'allowed' && egress.via === 'igw'
       ? `${label(build)} runs in a subnet routed to an internet gateway. CodeBuild network interfaces never get a public IP, so it cannot use the internet gateway; use a private subnet with a NAT gateway.`
@@ -240,6 +281,22 @@ function buildAction(run: Run, pipeline: N, action: PipelineAction, build: N, no
     run.push(build, 'Build: VPC network access', ok, ok ? (egress.outcome === 'legacy' ? 'VPC placement without explicit routing; NAT access assumed.' : reason) : reason,
       { component: 'Route', awsRule: 'A VPC-enabled CodeBuild project needs a NAT gateway or NAT instance; an internet gateway cannot be used. https://docs.aws.amazon.com/codebuild/latest/userguide/vpc-support.html' });
     if (!ok) return false;
+  }
+  // Build-time dependencies drawn from the project (CodeArtifact, Secrets Manager, Parameter Store,
+  // Signer, Security Hub import): each must be available and allowed by the project role.
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const dependencies = (options.drawnEdges ?? edges).filter(e => e.source === build.id && isIntegrationLink(build, byId.get(e.target), e.data, 'codebuild-dependency'))
+    .map(e => byId.get(e.target)!).sort((a, b) => a.id.localeCompare(b.id));
+  for (const dependency of dependencies) {
+    const integration = serviceIntegration(build, dependency)!;
+    if (dependency.data.health === 'failed') {
+      run.push(dependency, `Build dependency: ${label(dependency)}`, false, `${label(dependency)} is unavailable, so the build cannot complete: ${integration.meaning}`, { awsRule: integration.source });
+      return false;
+    }
+    const arn = cfg(dependency).resourceArn ?? '*';
+    const permissions = integration.permissionsFor?.(cfg(dependency)) ?? integration.permissions ?? [];
+    if (!roleStep(run, build, permissions, `Build dependency ${label(dependency)}`, arn)) return false;
+    run.push(dependency, `Build dependency: ${label(dependency)}`, true, integration.meaning, { awsRule: integration.source });
   }
   if (pushes && c.privilegedMode !== true) {
     run.push(build, 'Build: Docker image', false, `${label(build)} builds and pushes a Docker image but privileged mode is off, so commands that use the Docker daemon fail.`,
@@ -255,14 +312,24 @@ function buildAction(run: Run, pipeline: N, action: PipelineAction, build: N, no
 }
 
 
+/** Alarm state used for deployment monitoring: a teaching override, else the last live evaluation. */
+export function alarmState(alarm: N): 'OK' | 'ALARM' | 'INSUFFICIENT_DATA' {
+  const c = cfg(alarm);
+  return c.deploymentAlarmState ?? c.serviceRuntime?.alarm ?? 'OK';
+}
+
 /** Why the revision cannot be installed on one EC2 target (empty = it can). */
-export function instanceDeploymentProblems(instance: N, nodes: N[], options: { assumeRouteTables?: boolean }): string[] {
+export function instanceDeploymentProblems(instance: N, nodes: N[], options: { assumeRouteTables?: boolean; assumeGateways?: boolean; revisionArn?: string }): string[] {
   const reasons: string[] = [];
   if (instance.data.health === 'failed') reasons.push('instance is unavailable');
   if (cfg(instance).codeDeployAgent === false) reasons.push('the CodeDeploy agent is not installed');
   if (!instance.data.iamRole) reasons.push('no instance profile to download the revision from the artifact bucket');
+  else if (options.revisionArn) {
+    const access = evaluateServiceRole(instance, ['s3:GetObject'], options.revisionArn);
+    if (access.decision !== 'ALLOW') reasons.push(`instance profile cannot read the revision: ${access.reason}`);
+  }
   if (findContainingSubnetBoundary(instance, nodes)) {
-    const egress = evaluateInternetEgress(instance, 'codedeploy', nodes, { assume: options.assumeRouteTables });
+    const egress = evaluateInternetEgress(instance, 'codedeploy', nodes, routingOptions(options));
     if (egress.outcome === 'denied' || egress.outcome === 'invalid') reasons.push(`the agent cannot reach the CodeDeploy endpoint over HTTPS 443 (${egress.reason})`);
   }
   return reasons;
@@ -270,6 +337,7 @@ export function instanceDeploymentProblems(instance: N, nodes: N[], options: { a
 
 /** EC2 instances a CodeDeploy deployment group targets (direct EC2 or Auto Scaling group members). */
 export function deploymentInstances(deploy: N, nodes: N[], edges: E[]): N[] {
+  edges = workflowEdges(nodes, edges);
   const targets = edges.filter(e => e.source === deploy.id).map(e => nodes.find(n => n.id === e.target)).filter(Boolean) as N[];
   return targets.flatMap(t => instancesOf(t, nodes)).filter((n, i, all) => all.findIndex(m => m.id === n.id) === i);
 }
@@ -290,15 +358,33 @@ export function ec2DeploymentSucceeds(config: string, results: boolean[]): { suc
     : success ? 'OneAtATime still succeeds when only the last instance fails.' : 'OneAtATime fails as soon as any instance but the last fails.' };
 }
 
-function codeDeployAction(run: Run, pipeline: N, deploy: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean }): boolean {
+function codeDeployAction(run: Run, pipeline: N | undefined, deploy: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean; assumeGateways?: boolean; revisionArn?: string; drawnEdges?: E[] }): boolean {
   if (deploy.data.health === 'failed') { run.push(deploy, 'Deploy: CodeDeploy', false, `${label(deploy)} is unavailable.`); return false; }
-  if (!roleStep(run, pipeline, PIPELINE_ROLE_ACTIONS.CodeDeploy, 'Deploy (start)')) return false;
+  if (pipeline && !roleStep(run, pipeline, PIPELINE_ROLE_ACTIONS.CodeDeploy, 'Deploy (start)')) return false;
   const c = cfg(deploy);
   const targets = edges.filter(e => e.source === deploy.id).map(e => nodes.find(n => n.id === e.target)).filter(Boolean) as N[];
   const platform: string = c.computePlatform ?? (targets.some(t => ['ecs', 'fargate'].includes(sid(t)!)) ? 'ECS' : targets.some(t => sid(t) === 'lambda') ? 'Lambda' : 'Server');
   const groupActions = platform === 'Server' ? ['ec2:DescribeInstances', 'autoscaling:DescribeAutoScalingGroups']
     : platform === 'ECS' ? ['ecs:CreateTaskSet', 'ecs:UpdateServicePrimaryTaskSet', 'elasticloadbalancing:ModifyListener'] : ['lambda:GetAlias', 'lambda:UpdateAlias'];
-  if (!roleStep(run, deploy, groupActions, 'Deploy (deployment group)')) return false;
+  // CloudWatch alarms attached to the deployment group (alarm -> CodeDeploy integration links).
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const alarms = (options.drawnEdges ?? []).filter(e => e.target === deploy.id && isIntegrationLink(byId.get(e.source), deploy, e.data, 'codedeploy-alarm'))
+    .map(e => byId.get(e.source)!).sort((a, b) => a.id.localeCompare(b.id));
+  if (!roleStep(run, deploy, [...groupActions, ...(alarms.length ? ['cloudwatch:DescribeAlarms'] : [])], 'Deploy (deployment group)')) return false;
+  const alarmRef = 'https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-groups-configure-advanced-options.html';
+  /** AWS: an alarm in ALARM during the deployment stops it; rollback-on-alarm redeploys the last good revision. */
+  const alarmStops = (): boolean => {
+    const firing = alarms.find(a => alarmState(a) === 'ALARM');
+    if (!firing) {
+      if (alarms.length) run.push(deploy, 'Deploy: alarm monitoring', true, `${alarms.map(label).join(', ')} stayed OK during the deployment.`, { awsRule: alarmRef });
+      return false;
+    }
+    run.push(firing, 'Deploy: alarm monitoring', false, `${label(firing)} went to ALARM during the deployment, so CodeDeploy stopped it.`, { component: 'Service', awsRule: alarmRef });
+    run.push(deploy, 'Deploy: automatic rollback', c.autoRollback === true ? true : 'skipped', c.autoRollback === true
+      ? 'Rollback when alarm thresholds are met is enabled: CodeDeploy redeploys the last known good revision.'
+      : 'Rollback on alarm is not enabled; the deployment stays stopped.', { awsRule: 'https://docs.aws.amazon.com/codedeploy/latest/userguide/deployments-rollback-and-redeploy.html' });
+    return true;
+  };
 
   if (platform === 'Server') {
     const config = c.deploymentConfig ?? 'CodeDeployDefault.OneAtATime';
@@ -326,12 +412,13 @@ function codeDeployAction(run: Run, pipeline: N, deploy: N, nodes: N[], edges: E
     run.push(deploy, `Deploy: ${config}`, verdict.success, `${results.filter(Boolean).length} of ${instances.length} instance(s) succeeded${attempted}. ${verdict.rule}`,
       { awsRule: 'https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-configurations.html' });
     if (!verdict.success && c.autoRollback === true) run.push(deploy, 'Deploy: automatic rollback', true, 'Automatic rollback is enabled: CodeDeploy redeploys the last known good revision as a new deployment.');
-    return verdict.success;
+    return verdict.success && !alarmStops();
   }
 
   if (platform === 'ECS') {
     const config = c.deploymentConfig ?? 'CodeDeployDefault.ECSAllAtOnce';
-    const lb = targets.find(t => ['alb', 'nlb'].includes(sid(t)!)) ?? nodes.find(n => ['alb', 'nlb'].includes(sid(n)!) && edges.some(e => e.source === n.id && targets.some(t => t.id === e.target)));
+    // The load balancer serving the service is an application link (ALB/NLB -> ECS), so search drawn edges, not only CI/CD links.
+    const lb = targets.find(t => ['alb', 'nlb'].includes(sid(t)!)) ?? nodes.find(n => ['alb', 'nlb'].includes(sid(n)!) && (options.drawnEdges ?? edges).some(e => e.source === n.id && targets.some(t => t.id === e.target)));
     if (!lb) { run.push(deploy, 'Deploy: ECS blue/green', false, 'An ECS blue/green deployment needs a load balancer with production and test listeners; none is connected.'); return false; }
     if (sid(lb) === 'nlb' && config !== 'CodeDeployDefault.ECSAllAtOnce') {
       run.push(deploy, 'Deploy: ECS blue/green', false, `${config} is not supported with a Network Load Balancer; only CodeDeployDefault.ECSAllAtOnce is.`,
@@ -342,19 +429,19 @@ function codeDeployAction(run: Run, pipeline: N, deploy: N, nodes: N[], edges: E
     const healthy = services.length > 0 && services.every(s => s.data.health !== 'failed');
     run.push(deploy, `Deploy: ${config}`, healthy, healthy ? `Replacement task set started and traffic shifted through ${label(lb)} (${config}).` : 'The replacement task set did not become healthy, so traffic was not shifted.');
     if (!healthy && c.autoRollback === true) run.push(deploy, 'Deploy: automatic rollback', true, 'Traffic stays on, or returns to, the original task set.');
-    return healthy;
+    return healthy && !alarmStops();
   }
 
   const config = c.deploymentConfig ?? 'CodeDeployDefault.LambdaAllAtOnce';
   const fns = targets.filter(t => sid(t) === 'lambda');
   const ok = fns.length > 0 && fns.every(f => f.data.health !== 'failed');
   run.push(deploy, `Deploy: ${config}`, ok, ok ? `Alias traffic shifted to the new version (${config}).` : 'No healthy Lambda function target; traffic stays on the current version.');
-  return ok;
+  return ok && !alarmStops();
 }
 
-function ecsAction(run: Run, pipeline: N, target: N, nodes: N[], stages: PipelineStage[]): boolean {
+function ecsAction(run: Run, pipeline: N, action: PipelineAction, target: N, nodes: N[], stages: PipelineStage[]): boolean {
   if (!roleStep(run, pipeline, PIPELINE_ROLE_ACTIONS.ECS, 'Deploy (start)')) return false;
-  const build = stages.flatMap(s => s.actions).filter(a => a.provider === 'CodeBuild').map(a => nodes.find(n => n.id === a.nodeId)).find(Boolean);
+  const build = stages.flatMap(s => s.actions).filter(a => a.provider === 'CodeBuild' && a.outputArtifacts.some(output => action.inputArtifacts.includes(output))).map(a => nodes.find(n => n.id === a.nodeId)).find(Boolean);
   const definitions: { name?: string }[] = Array.isArray(cfg(build).imageDefinitions) ? cfg(build).imageDefinitions : [];
   const container = cfg(target).ecs?.containerName ?? cfg(target).containerName;
   if (definitions.length && container && !definitions.some(d => d.name === container)) {
@@ -369,6 +456,8 @@ function ecsAction(run: Run, pipeline: N, target: N, nodes: N[], stages: Pipelin
 
 /** Runs one pipeline execution. */
 export function runPipelineExecution(pipeline: N, nodes: N[], edges: E[], scenario: SimulationScenario): SimulationResult {
+  const drawnEdges = edges;
+  edges = workflowEdges(nodes, edges);
   const run = new Run(pipeline);
   const stages = resolvePipelineStages(pipeline, nodes, edges);
   const finish = (success: boolean, statusCode: number, summary: string): SimulationResult => ({
@@ -391,9 +480,9 @@ export function runPipelineExecution(pipeline: N, nodes: N[], edges: E[], scenar
     for (const action of stage.actions) {
       const node = nodes.find(n => n.id === action.nodeId)!;
       const ok = action.category === 'Source' ? sourceAction(run, pipeline, action, node)
-        : action.category === 'Build' || action.category === 'Test' ? buildAction(run, pipeline, action, node, nodes, edges, scenario)
-        : action.provider === 'CodeDeploy' ? codeDeployAction(run, pipeline, node, nodes, edges, scenario)
-        : ecsAction(run, pipeline, node, nodes, stages);
+        : action.category === 'Build' || action.category === 'Test' ? buildAction(run, pipeline, action, node, nodes, edges, { ...scenario, drawnEdges })
+        : action.provider === 'CodeDeploy' ? codeDeployAction(run, pipeline, node, nodes, edges, { ...scenario, drawnEdges })
+        : ecsAction(run, pipeline, action, node, nodes, stages);
       if (!ok) {
         const denied = run.steps.some(s => s.status === 'failed' && s.details?.decision?.component === 'IAM');
         for (const later of stages.slice(index + 1)) run.push(pipeline, `Stage ${later.name}`, 'skipped', `Not run: stage ${stage.name} failed.`);
@@ -405,7 +494,88 @@ export function runPipelineExecution(pipeline: N, nodes: N[], edges: E[], scenar
   return finish(true, 200, `Pipeline execution succeeded: ${stages.map(s => s.name).join(' → ')}.`);
 }
 
+/** CodeConnections connection state; AWS creates connections PENDING until the handshake. */
+export function connectionStatus(node: N): 'AVAILABLE' | 'PENDING' | 'ERROR' {
+  const status = cfg(node).connectionStatus;
+  return status === 'PENDING' || status === 'ERROR' ? status : 'AVAILABLE';
+}
+export function connectionArn(node: N): string {
+  return cfg(node).connectionArn ?? `arn:aws:codeconnections:us-east-1:000000000000:connection/${node.id}`;
+}
+
 /** Pipelines started by a change to `source` (CodeCommit push, S3 upload, ECR image push). */
 export function pipelinesTriggeredBy(source: N, nodes: N[], edges: E[]): N[] {
+  edges = workflowEdges(nodes, edges);
   return edges.filter(e => e.source === source.id).map(e => nodes.find(n => n.id === e.target)).filter(n => sid(n) === 'codepipeline') as N[];
+}
+
+/** Direct service operations reuse the pipeline actions without inventing a pipeline caller.
+ * Caller API authorization is outside this slice; project/deployment roles are evaluated.
+ */
+export function runStandaloneDeveloperTool(owner: N, nodes: N[], edges: E[], scenario: SimulationScenario, sourceOverride?: N): SimulationResult {
+  const drawnEdges = edges;
+  edges = workflowEdges(nodes, edges);
+  const run = new Run(owner);
+  const c = cfg(owner);
+  const finish = (ok: boolean, code: number, summary: string): SimulationResult => ({
+    kind: 'workflow', outcome: ok ? 'success' : code === 403 ? 'denied' : 'failure',
+    scenario, steps: run.steps, success: ok, statusCode: code, summary,
+    totalLatencyMs: run.time, path: [...new Set([owner.id, ...run.steps.map(s => s.targetNodeId)])],
+    bottlenecksDetected: [], cascadeOccurred: false
+  });
+  const fail = (target: N, code: number, operation: string, reason: string, source: string) => {
+    run.push(target, operation, false, reason, { component: code === 403 ? 'IAM' : 'Service', awsRule: source });
+    return finish(false, code, reason);
+  };
+  const buildRef = 'https://docs.aws.amazon.com/codebuild/latest/userguide/run-build-cli.html';
+  const deployRef = 'https://docs.aws.amazon.com/codedeploy/latest/userguide/deployments-create-cli.html';
+  if (owner.data.health === 'failed') return fail(owner, 503, 'Start operation', `${label(owner)} is unavailable.`, buildRef);
+  if (sid(owner) === 'codecommit') {
+    run.push(owner, 'Push commit', true, `Commit recorded on branch ${c.branch ?? 'main'}. No executable pipeline trigger is connected. Git credentials and repository contents are not simulated.`,
+      { awsRule: 'https://docs.aws.amazon.com/codecommit/latest/userguide/how-to-create-commit.html' });
+    return finish(true, 200, 'Repository operation completed; no pipeline was started. Scope: simulated commit event; Git authentication and contents were not evaluated.');
+  }
+  if (!owner.data.iamRole) return fail(owner, 403, 'Service role', `${label(owner)} requires a service role. Attach one in the service role panel.`, sid(owner) === 'codebuild' ? buildRef : deployRef);
+  if (sid(owner) === 'codebuild') {
+    const sources = edges.filter(e => e.target === owner.id).map(e => nodes.find(n => n.id === e.source)!).filter(n => ['codecommit', 's3'].includes(sid(n)!));
+    // An EventBridge rule passes the repository that emitted the event (the project's configured source).
+    const source = sourceOverride ?? (c.sourceNodeId ? sources.find(n => n.id === c.sourceNodeId) : sources.length === 1 ? sources[0] : undefined);
+    const type = c.sourceType || (source ? sid(source) === 's3' ? 'S3' : 'CODECOMMIT' : '');
+    if (!['NO_SOURCE', 'CODECOMMIT', 'S3'].includes(type)) return fail(owner, 400, 'Build source', 'Choose a connected CodeCommit/S3 source or NO_SOURCE with an inline buildspec. CODEPIPELINE input must be supplied by running the pipeline.', buildRef);
+    if (type === 'NO_SOURCE') {
+      if (typeof c.buildspec !== 'string' || !c.buildspec.includes('\n') || !/^phases\s*:/m.test(c.buildspec)) return fail(owner, 400, 'Build source', 'NO_SOURCE requires an inline YAML buildspec containing phases, not a buildspec filename. Buildspec commands are simulated, not executed.', 'https://docs.aws.amazon.com/codebuild/latest/userguide/no-source.html');
+    } else {
+      if (!source || sid(source) !== (type === 'S3' ? 's3' : 'codecommit')) return fail(owner, 400, 'Build source', 'Connect the selected source to this build and select it explicitly when multiple sources exist.', buildRef);
+      if (source.data.health === 'failed') return fail(source, 503, 'Download source', `${label(source)} is unavailable.`, buildRef);
+      const key = c.sourceKey ?? cfg(source).sourceKey ?? cfg(source).objectKey;
+      if (type === 'S3' && !key) return fail(source, 400, 'Download source', 'An S3 build source requires an object key for the source ZIP.', buildRef);
+      const arn = type === 'S3' ? `arn:aws:s3:::${cfg(source).bucketName ?? source.id}/${key}`
+        : cfg(source).resourceArn ?? `arn:aws:codecommit:us-east-1:000000000000:${source.id}`;
+      if (!roleStep(run, owner, [type === 'S3' ? 's3:GetObject' : 'codecommit:GitPull'], 'Download source', arn)) return finish(false, 403, 'Build source access denied.');
+      run.push(source, 'Download source', true, `Read ${type === 'S3' ? key : `branch ${cfg(source).branch ?? 'main'}`} from ${label(source)}.`, { awsRule: buildRef });
+    }
+    const outputs = edges.filter(e => e.source === owner.id).map(e => nodes.find(n => n.id === e.target)!).filter(n => ['s3', 'ecr_registry', 'cloudwatch'].includes(sid(n)!));
+    for (const output of outputs) {
+      if (output.data.health === 'failed') return fail(output, 503, 'Build dependency', `${label(output)} is unavailable.`, buildRef);
+      if (sid(output) === 's3' && !roleStep(run, owner, ['s3:PutObject'], 'Build artifacts', `arn:aws:s3:::${cfg(output).bucketName ?? output.id}/*`)) return finish(false, 403, 'Build artifact access denied.');
+    }
+    const action: PipelineAction = { name: 'Standalone build', category: 'Build', provider: 'CodeBuild', nodeId: owner.id, inputArtifacts: [], outputArtifacts: outputs.some(n => sid(n) === 's3') ? ['BuildArtifact'] : [] };
+    const ok = buildAction(run, undefined, action, owner, nodes, edges, { ...scenario, drawnEdges, projectActions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'] });
+    const denied = run.steps.some(s => s.status === 'failed' && s.details?.decision?.component === 'IAM');
+    return finish(ok, ok ? 200 : denied ? 403 : 500, ok ? 'Standalone build succeeded. Commands and artifacts are simulated; downstream deployments were not started.' : 'Standalone build failed. See the recorded source, role, network or command decision.');
+  }
+  const targets = edges.filter(e => e.source === owner.id).map(e => nodes.find(n => n.id === e.target)!);
+  const platform = c.computePlatform ?? (targets.some(n => ['ecs', 'fargate'].includes(sid(n)!)) ? 'ECS' : targets.some(n => sid(n) === 'lambda') ? 'Lambda' : 'Server');
+  const configs: readonly string[] = platform === 'Server' ? EC2_DEPLOYMENT_CONFIGS : platform === 'ECS' ? ECS_DEPLOYMENT_CONFIGS : LAMBDA_DEPLOYMENT_CONFIGS;
+  if (!['Server', 'ECS', 'Lambda'].includes(platform) || (c.deploymentConfig && !configs.includes(c.deploymentConfig))) return fail(owner, 400, 'Deployment configuration', 'Select a supported compute platform and matching predefined deployment configuration.', deployRef);
+  const buckets = edges.filter(e => e.target === owner.id).map(e => nodes.find(n => n.id === e.source)!).filter(n => sid(n) === 's3');
+  const bucket = c.revisionBucketId ? nodes.find(n => n.id === c.revisionBucketId && sid(n) === 's3') : buckets.length === 1 ? buckets[0] : undefined;
+  const key = c.revisionKey;
+  if (!bucket || typeof key !== 'string' || !key.trim()) return fail(owner, 400, 'Deployment revision', 'Select an S3 revision bucket and revision object key before creating a deployment. A build connection alone does not supply an existing revision.', deployRef);
+  if (bucket.data.health === 'failed') return fail(bucket, 503, 'Deployment revision', `${label(bucket)} is unavailable; the revision cannot be read.`, deployRef);
+  const revisionArn = `arn:aws:s3:::${cfg(bucket).bucketName ?? bucket.id}/${key}`;
+  run.push(bucket, 'Deployment revision', true, `Selected ${revisionArn}. Object contents and AppSpec hooks are not simulated.`, { awsRule: deployRef });
+  const ok = codeDeployAction(run, undefined, owner, nodes, edges, { ...scenario, revisionArn, drawnEdges });
+  const denied = run.steps.some(s => s.status === 'failed' && s.details?.decision?.component === 'IAM');
+  return finish(ok, ok ? 200 : denied ? 403 : 500, ok ? 'Standalone deployment succeeded for the configured revision and deployment group.' : 'Standalone deployment failed. See the recorded role, target, agent or network decision.');
 }

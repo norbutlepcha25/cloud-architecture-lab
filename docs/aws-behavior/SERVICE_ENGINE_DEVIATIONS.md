@@ -128,3 +128,38 @@ interaction test (`test/service-engine.test.ts` S3-S11) that hits this category 
   (`src/engine/network/`) and `src/engine/layout/containment.ts`, unchanged by this phase. Forcing
   an artificial `ServiceModel` onto a non-service concept would misrepresent what this abstraction
   is for.
+
+## Developer-tool connection scope (2026-10-18)
+
+CI/CD management links and legacy HTTPS drawings share the live workflow engine. Artifact
+routing, artifact cardinality and CodeBuild PrimarySource validation are bounded supported behavior;
+see [CodePipeline specification](../behavior/codepipeline.md#connection-consistency-increment--2026-10-18).
+Canvas-derived stages remain educational shorthand. Missing service roles are still reported
+NOT_EVALUATED rather than denied, artifact-store access is not fully evaluated, and complete event-trigger fan-out/filtering remains unsupported. Standalone build/deploy now
+have a bounded implementation documented in their service specs; caller API authorization,
+source/revision contents and command/hook execution remain unmodeled. Passing
+connection validation is not proof of runtime access or complete AWS service fidelity.
+
+## X-Ray root-segment API slice (2026-10-18)
+
+[Specification and evidence](../behavior/xray.md): explicit PutTraceSegments ingestion now runs
+through the shared live dispatcher with publisher credentials, shared route checks and per-item
+results. This is not automatic tracing. Root required fields, name/ID formats, size, partial
+batch acceptance and in-progress replacement are bounded supported behavior. Exact item error
+codes, full optional-field schema, trace time freshness, sampling, subsegments, querying/maps,
+collector behavior and endpoint policy/firewall completeness remain outside coverage. API success
+can contain unprocessed documents. Store/UI `accepted` counts and `InvalidSegment` labels are
+simulator evidence, not guaranteed AWS response fields/error strings. Generic injected health
+failure is tested without claiming specialized X-Ray FAILURE_SIMULATION or FULL_BEHAVIOR.
+
+## Third-party actors and assumed gateways (2026-10-22)
+
+- External actors are modeled as internet endpoints only; Git push results are workflow evidence,
+  not packet traces. GitHub/GitLab/Bitbucket permissions and webhook delivery are not simulated.
+- CodeCommit developer identity uses preset identity policies (Git subset of the AWS managed
+  policies), not the full managed policy documents or branch-condition keys.
+- "Assume gateways" deliberately deviates from AWS (a VPC without an IGW has no internet path);
+  it is opt-in, labeled in every trace step it affects, and never overrides drawn gateways.
+- Service integrations (serviceIntegrations.ts): build dependencies are checked as role permissions
+  plus health only (no secret values, packages or signatures); EventBridge patterns match branch
+  only; non-executed integrations are relationship-only and say so in their connection reason.

@@ -342,7 +342,7 @@ Each generic appendix entry is a candidate requiring G1–G5. Exact AWS semantic
 | 206 | AWS CodeArtifact | `codeartifact` | Generic | P8 — G1–G5, one selected operation at a time |
 | 207 | Amazon CodeCatalyst | `codecatalyst` | Generic | P8 — G1–G5, one selected operation at a time |
 | 208 | AWS Cloud9 | `cloud9` | Generic | P8 — G1–G5, one selected operation at a time |
-| 209 | AWS X-Ray | `xray` | Generic | P8 — G1–G5, one selected operation at a time |
+| 209 | AWS X-Ray | `xray` | Partial: PutTraceSegments root segments | See [spec](behavior/xray.md); sampling, subsegments, queries and automatic instrumentation remain unsupported |
 | 210 | AWS CloudShell | `cloudshell` | Generic | P8 — G1–G5, one selected operation at a time |
 | 211 | AWS Application Composer | `app_composer` | Generic | P8 — G1–G5, one selected operation at a time |
 | 212 | Amazon Corretto | `corretto` | Generic | P8 — G1–G5, one selected operation at a time |

@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { ServiceNodeData } from '../../types/index.ts';
 import { authorizeApplicationHop } from '../iam/applicationHop.ts';
-import { evaluateInternetEgress } from '../network/subnetRouting.ts';
+import { evaluateInternetEgress, routingOptions } from '../network/subnetRouting.ts';
 import { findContainingSubnetBoundary } from '../layout/containment.ts';
 
 /**
@@ -87,7 +87,7 @@ export function sqsConfigurationIssues(nodes: N[], edges: E[]): QueueIssue[] {
 export interface SqsStep { targetId: string; action: string; ok: boolean; explanation: string; awsRule?: string }
 
 /** Producer-side checks before SendMessage is accepted. */
-export function evaluateProducer(producer: N, queue: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean }): SqsStep[] {
+export function evaluateProducer(producer: N, queue: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean; assumeGateways?: boolean }): SqsStep[] {
   const steps: SqsStep[] = [];
   const s = queueSettings(queue, nodes, edges);
   if (s.messageBytes > SQS_LIMITS.maxMessageBytes) {
@@ -97,7 +97,7 @@ export function evaluateProducer(producer: N, queue: N, nodes: N[], edges: E[], 
     return steps;
   }
   if (findContainingSubnetBoundary(producer, nodes)) {
-    const egress = evaluateInternetEgress(producer, 'sqs', nodes, { assume: options.assumeRouteTables });
+    const egress = evaluateInternetEgress(producer, 'sqs', nodes, routingOptions(options));
     if (egress.outcome !== 'legacy') {
       const ok = egress.outcome === 'allowed';
       steps.push({ targetId: queue.id, action: ok ? `SQS endpoint via ${egress.via}` : 'SQS endpoint: no route', ok, explanation: ok ? egress.reason
@@ -112,7 +112,7 @@ export function evaluateProducer(producer: N, queue: N, nodes: N[], edges: E[], 
 export interface ConsumerResult { steps: SqsStep[]; outcome: 'processed' | 'dead-lettered' | 'retrying' | 'not-polled' }
 
 /** One consumer polling the queue for the message just sent. Deterministic retry/redrive. */
-export function evaluateConsumer(consumer: N, queue: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean }): ConsumerResult {
+export function evaluateConsumer(consumer: N, queue: N, nodes: N[], edges: E[], options: { assumeRouteTables?: boolean; assumeGateways?: boolean }): ConsumerResult {
   const steps: SqsStep[] = [];
   const s = queueSettings(queue, nodes, edges);
   const name = label(consumer);
@@ -138,7 +138,7 @@ export function evaluateConsumer(consumer: N, queue: N, nodes: N[], edges: E[], 
   }
   if (s.kmsKeyId && !s.kmsKey) steps.push({ targetId: queue.id, action: 'SSE-KMS key', ok: true, explanation: 'The queue uses a KMS key that is not on the canvas; kms:Decrypt was not evaluated.' });
   if (consumer.data.serviceId !== 'lambda' && findContainingSubnetBoundary(consumer, nodes)) {
-    const egress = evaluateInternetEgress(consumer, 'sqs', nodes, { assume: options.assumeRouteTables });
+    const egress = evaluateInternetEgress(consumer, 'sqs', nodes, routingOptions(options));
     if (egress.outcome === 'denied' || egress.outcome === 'invalid') {
       steps.push({ targetId: queue.id, action: `${name}: ReceiveMessage network path`, ok: false, explanation: `${egress.reason} The consumer cannot reach the SQS endpoint.` });
       return { steps, outcome: 'not-polled' };

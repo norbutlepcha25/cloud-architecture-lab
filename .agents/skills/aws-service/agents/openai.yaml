@@ -1,0 +1,4 @@
+interface:
+  display_name: "AWS Service Behavior"
+  short_description: "Implement and verify AWS simulator service behavior"
+  default_prompt: "Use $aws-service to inspect and improve SQS behavior in AWS Architecture Lab."

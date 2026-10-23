@@ -5,7 +5,7 @@ import { isEksManagementPair } from '../engine/architecture/eksRelationships.ts'
 import { labAnnotationProtocol } from '../engine/architecture/labConnections.ts';
 import { observeAlbRequests } from '../engine/scaling/albObservation.ts';
 import { resetAsg } from '../engine/scaling/asg.ts';
-import { checkConnection, connectionProtocols, interactionTransport, isManagementPair, isAuthorizationPair } from '../engine/architecture/connectionContracts.ts';
+import { checkConnection, cicdRelationship, connectionProtocols, interactionTransport, isManagementPair, isAuthorizationPair } from '../engine/architecture/connectionContracts.ts';
 import { parseDraft, serializeDraft } from '../engine/persistence/draft.ts';
 import type { Viewport } from '@xyflow/react';
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
@@ -49,6 +49,8 @@ import type { RequestTrace } from '../engine/trace/index.ts';
 
 import type { LabReference } from '../data/courseLabs.ts';
 import { runLabReference } from '../engine/labs/runLabReference.ts';
+import { isExternalActor } from '../engine/architecture/externalActors.ts';
+import { nonIntegrationReason, serviceIntegration } from '../engine/architecture/serviceIntegrations.ts';
 
 interface ArchitectureContextType {
   draftName: string;
@@ -539,7 +541,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     const annotationProtocol = management ? undefined : labAnnotationProtocol(activeLabReference, sourceNode, targetNode);
     const relationship = authorization ? 'authorization' : management || annotationProtocol ? 'manages' : 'request';
     const protocols: ProtocolType[] = authorization ? ['Event'] : annotationProtocol ? [annotationProtocol] : management ? (isEksManagementPair(sourceNode, targetNode) ? ['HTTPS'] : ['Event']) : connectionProtocols(sourceNode, targetNode);
-    if (!protocols.length) { window.alert('Behavior not modeled or unsupported interaction for this pair. No request connection was created.'); return; }
+    if (!protocols.length) { window.alert(nonIntegrationReason(sourceNode, targetNode) ?? 'Behavior not modeled or unsupported interaction for this pair. No request connection was created.'); return; }
     if (!protocols.includes(defaultProtocol)) defaultProtocol = protocols[0];
     const validation = checkConnection(sourceNode, targetNode, { protocol: defaultProtocol, relationship });
     if (validation.status !== 'valid' && !(annotationProtocol && validation.status === 'unknown')) { window.alert(validation.reason); return; }
@@ -553,7 +555,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
       },
       data: {
         relationship,
-        label: authorization ? 'IAM authorization (not request traffic)' : annotationProtocol ? 'Lab configuration link (not request traffic)' : management ? (isEksManagementPair(sourceNode, targetNode) ? 'EKS management relationship (not executed)' : sourceNode.data.serviceId === 'alb' ? 'ALB request metrics' : 'Management') : undefined,
+        label: authorization ? 'IAM authorization (not request traffic)' : annotationProtocol ? 'Lab configuration link (not request traffic)' : management ? (isEksManagementPair(sourceNode, targetNode) ? 'EKS management relationship (not executed)' : cicdRelationship(sourceNode, targetNode) ?? serviceIntegration(sourceNode, targetNode)?.meaning ?? (sourceNode.data.serviceId === 'alb' ? 'ALB request metrics' : 'Management')) : undefined,
         referenceAnnotation: !authorization && annotationProtocol ? activeLabReference?.id : undefined,
         protocol: defaultProtocol,
         transport: interactionTransport(defaultProtocol),
@@ -608,7 +610,7 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         category: serviceDef.category,
         health: 'healthy',
         az: options?.az || (serviceDef.defaultConfig?.multiAz ? 'Multi-AZ' : 'AZ-A'),
-        subnet: options?.subnet || (['user', 'route53', 'cloudfront'].includes(serviceId) ? 'global' : ['alb', 'api_gateway'].includes(serviceId) ? 'public' : 'private'),
+        subnet: options?.subnet || (isExternalActor(serviceId) || ['route53', 'cloudfront'].includes(serviceId) ? 'global' : ['alb', 'api_gateway'].includes(serviceId) ? 'public' : 'private'),
         replicas: options?.replicas || serviceDef.defaultConfig?.replicas || 1,
         multiAz: options?.multiAz !== undefined ? options.multiAz : (serviceDef.defaultConfig?.multiAz || false),
         ...options
@@ -1114,11 +1116,13 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
     const result = runSimulation(effectiveNodes, effectiveEdges, { ...scenario, startNodeId: nodeId });
     track('simulation_run', { page: 'lab', success: result.success });
     setSimulationResult(result);
+    if (result.serviceStates && Object.keys(result.serviceStates).length) setNodes(previous => previous.map(node => result.serviceStates?.[node.id]
+      ? { ...node, data: { ...node.data, customConfig: { ...node.data.customConfig, serviceRuntime: result.serviceStates[node.id] } } } : node));
     setActiveStepIndex(0);
     setHoveredStepIndex(null);
     setHighlightTaskFlow(true);
     setIsPlaying(true);
-  }, [effectiveNodes, effectiveEdges, scenario]);
+  }, [effectiveNodes, effectiveEdges, scenario, setNodes]);
 
   // Toggle Task Flow lines on/off with smart auto-simulation
   const toggleTaskFlow = useCallback(() => {

@@ -376,6 +376,23 @@ export const AwsServiceIcon: React.FC<{ serviceId?: string; category?: string; s
         </svg>
       );
 
+    case 'developer':
+      return (
+        <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+          <rect x="9" y="11" width="30" height="19" rx="2" stroke="#475569" strokeWidth="2.5" fill="#F8FAFC" />
+          <path d="M5 36H43" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M19 17L15 20.5L19 24M29 17L33 20.5L29 24" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+
+    case 'on_premises':
+      return (
+        <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+          <path d="M8 40V14L24 8L40 14V40Z" stroke="#475569" strokeWidth="2.5" strokeLinejoin="round" fill="#F8FAFC" />
+          <path d="M15 20H33M15 27H33M15 34H33" stroke="#475569" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+
     case 'client_ui':
     case 'data_transfer_ui':
       return (

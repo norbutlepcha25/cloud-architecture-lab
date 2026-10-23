@@ -1,3 +1,6 @@
+import { SERVICE_OPERATIONS } from '../serviceOperations/definitions.ts';
+import { withServiceOperations } from '../serviceOperations/models.ts';
+import { xrayModel } from './models/xray.ts';
 // The serviceId -> ServiceModel registry - flat and order-independent, exactly like
 // `costCalculator.ts`'s `PRICING_MODULE_ENTRIES` registry (each entry is evaluated independently;
 // unlike the Network Engine's per-hop pipeline, there is no ordering concern here at all).
@@ -27,6 +30,7 @@ const TIER_1_AND_2_MODELS: ServiceModel[] = [
   sqsModel, snsModel,
   routeTablesModel, // decorative, but a real catalog serviceId - see networkingPrimitives.ts
   // Tier 2
+  xrayModel,
   ecrModel, efsModel, kmsModel, secretsManagerModel, cognitoModel,
   eventbridgeModel, stepFunctionsModel, elastiCacheModel, cloudwatchModel, wafModel,
   s3GatewayEndpointModel, privateLinkModel
@@ -36,6 +40,8 @@ const REGISTRY: Record<string, ServiceModel> = {};
 for (const model of TIER_1_AND_2_MODELS) {
   REGISTRY[model.id] = model;
 }
+
+for (const id of Object.keys(SERVICE_OPERATIONS)) REGISTRY[id] = withServiceOperations(id, REGISTRY[id]);
 
 const GENERIC_CACHE = new Map<string, ServiceModel>();
 
