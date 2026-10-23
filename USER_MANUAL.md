@@ -249,4 +249,4 @@ EKS's control-plane fee) don't change with region, by design.
   a resilience improvement, try switching a synchronous dependency to asynchronous and re-running
   the same failure scenario.
 
-- NTL
+- NTL, CTD

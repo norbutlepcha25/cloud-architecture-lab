@@ -29,6 +29,10 @@ export function runLiveSimulation(nodes: Node<ServiceNodeData>[], edges: Edge<Co
   // A developer's Git push, or a push event at a third-party Git host, may start a pipeline.
   if (start?.data.serviceId === 'developer' && pushTargets(start, nodes, edges).length) return structuredClone(runGitPush(start, [...nodes].sort(byId), [...edges].sort(byId), scenario));
   if (start && isConnectionGitProvider(start.data.serviceId)) return structuredClone(runGitPush(undefined, [...nodes].sort(byId), [...edges].sort(byId), scenario, start));
+  // A repository push with an Amplify Hosting app connected fans out to the app as well as any pipeline.
+  if (start?.data.serviceId === 'codecommit' && edges.some(e => e.source === start.id && isIntegrationLink(start, nodesById.get(e.target), e.data, 'amplify-cd'))) {
+    return structuredClone(runGitPush(undefined, [...nodes].sort(byId), [...edges].sort(byId), scenario, start));
+  }
   const pipeline = start?.data.serviceId === 'codepipeline' ? start
     : start && ['codecommit', 'ecr_registry'].includes(start.data.serviceId) ? pipelinesTriggeredBy(start, nodes, edges).sort(byId)[0] : undefined;
   if (pipeline) return structuredClone(runPipelineExecution(pipeline, [...nodes].sort(byId), [...edges].sort(byId), scenario));

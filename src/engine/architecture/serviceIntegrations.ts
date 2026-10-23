@@ -21,7 +21,7 @@ export interface ServiceIntegration {
   permissions?: string[];
   /** Target-dependent permissions (e.g. Signer differs for container images and Lambda code). */
   permissionsFor?: (targetConfig: Record<string, any>) => string[];
-  executes?: 'git-push-events' | 'codebuild-dependency' | 'codedeploy-alarm';
+  executes?: 'git-push-events' | 'codebuild-dependency' | 'codedeploy-alarm' | 'amplify-cd';
 }
 
 export const SERVICE_INTEGRATIONS: ServiceIntegration[] = [
@@ -53,6 +53,9 @@ export const SERVICE_INTEGRATIONS: ServiceIntegration[] = [
     meaning: 'Custom integration only: the build imports scan findings with BatchImportFindings (Security Hub CSPM, ASFF). CodeBuild is not a native Security Hub integration.',
     permissions: ['securityhub:BatchImportFindings'],
     source: 'https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-custom-providers.html' },
+  { from: ['codecommit', 'github', 'gitlab', 'bitbucket'], to: ['amplify'], executes: 'amplify-cd',
+    meaning: 'Amplify Hosting app connected to this repository branch: continuous deployment builds and deploys the app on each push when auto build is enabled.',
+    source: 'https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html' },
   { from: ['github', 'gitlab', 'bitbucket'], to: ['codebuild'],
     meaning: 'Build project source through a CodeConnections connection; webhook events can start builds. The project role needs codeconnections:GetConnectionToken and codeconnections:GetConnection.',
     source: 'https://docs.aws.amazon.com/codebuild/latest/userguide/connections-github-app.html' },

@@ -24,6 +24,7 @@ valid documented relationships the simulator does not execute, and the connectio
 | CodeBuild → CodeArtifact | pipeline.ts buildAction | codeartifact:GetAuthorizationToken, GetRepositoryEndpoint, ReadFromRepository, sts:GetServiceBearerToken (its `sts:AWSServiceName` condition is not evaluated). [tokens-authentication](https://docs.aws.amazon.com/codeartifact/latest/ug/tokens-authentication.html) |
 | CodeBuild → AWS Signer | pipeline.ts buildAction | Signer `customConfig.signingPlatform`: container (default) = signer:SignPayload, GetRevocationStatus; lambda = StartSigningJob, GetSigningProfile (versioned S3 buckets not modeled). [image-signing-prerequisites](https://docs.aws.amazon.com/signer/latest/developerguide/image-signing-prerequisites.html), [StartSigningJob](https://docs.aws.amazon.com/signer/latest/api/API_StartSigningJob.html) |
 | CloudWatch alarm → CodeDeploy | pipeline.ts codeDeployAction | Alarms attached to the deployment group: alarm state `customConfig.deploymentAlarmState` (teaching override, set in the deployment group panel) else the last live evaluation `serviceRuntime.alarm`. ALARM during the rollout stops the deployment; with `autoRollback` CodeDeploy redeploys the last good revision, otherwise the rollback step is skipped. The service role needs cloudwatch:DescribeAlarms. [advanced options](https://docs.aws.amazon.com/codedeploy/latest/userguide/deployment-groups-configure-advanced-options.html) |
+| CodeCommit / GitHub / GitLab / Bitbucket → Amplify | gitPush.ts amplifyJob | Amplify Hosting continuous deployment: after a successful push, every connected app whose `customConfig.branch` (default main) matches and whose `enableAutoBuild` is not false runs build → atomic deploy, alongside any pipeline/EventBridge path. `buildResult: FAILED` fails the job and the previous version keeps serving. Not modeled: service role, PR previews, `[skip-cd]`, build commands. [welcome](https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html), [Branch.enableAutoBuild](https://docs.aws.amazon.com/amplify/latest/APIReference/API_Branch.html) |
 | CodeBuild → Security Hub | pipeline.ts buildAction | Custom integration only: securityhub:BatchImportFindings (Security Hub CSPM, ASFF). [custom providers](https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-custom-providers.html) |
 
 Build dependencies are checked in pipeline and standalone builds: unavailable dependency = failure,
@@ -78,7 +79,7 @@ Corrections:
 Corrected version of this diagram: reference `secure-cicd-ecs-bluegreen`
 (src/data/references/20-secure-cicd-ecs-bluegreen.json), regression test/secure-cicd-reference.test.ts.
 
-Evidence: tests/aws-conformance/devtools/integrations.test.ts (12 cases); test/secure-cicd-reference.test.ts (6).
+Evidence: tests/aws-conformance/devtools/integrations.test.ts (12 cases); devtools/amplify-cd.test.ts (9); test/secure-cicd-reference.test.ts (6).
 Not modeled: event pattern fields other than branch, input transformers, retries/DLQs on targets,
 Inspector findings content, Security Hub findings, alarm timing within a canary/linear rollout (an alarm is evaluated once, after traffic shifting),
 AppConfig retrieval as a live request, CloudTrail event content.

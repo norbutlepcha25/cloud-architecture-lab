@@ -10,7 +10,7 @@ const configurations: Record<string, string> = {
   ecs: 'ecs', eks: 'eks', route_tables: 'routes', internet_gateway: 'igw',
   xray: 'xray',
   codepipeline: 'pipeline', codecommit: 'repo', codebuild: 'build', codedeploy: 'deploy',
-  signer: 'signer',
+  signer: 'signer', amplify: 'amplify',
   developer: 'developer', github: 'gitprovider', gitlab: 'gitprovider', bitbucket: 'gitprovider',
   s3_gateway_endpoint: 'endpoint', privatelink: 'endpoint',
   sqs: 'operations', sns: 'operations', cloudwatch: 'operations', cloudtrail: 'operations',

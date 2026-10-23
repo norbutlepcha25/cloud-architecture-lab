@@ -1,5 +1,15 @@
 # Handoff — live project state
 
+## Amplify Hosting continuous deployment on push — 2026-10-23
+
+User asked why a push did not trigger Amplify. Cause: Amplify was only a generic HTTPS endpoint; no
+repository → Amplify relationship existed. Added integration (CodeCommit/GitHub/GitLab/Bitbucket →
+amplify, executes 'amplify-cd'); runGitPush now wraps the existing push/primary trigger and fans out to
+connected Amplify apps (branch match, enableAutoBuild, health, buildResult; atomic deploy). The
+repository Push commit entry point routes through runGitPush when an Amplify link exists. UI:
+AmplifyBranchPanel ("Hosting branch"). Reference 14 (CloudFront → Amplify origin) unaffected. Tests:
+devtools/amplify-cd.test.ts (9). npm test 708/708; UI 50/51 (pre-existing); build passes.
+
 ## AWS service integration registry — 2026-10-22
 
 User asked to verify a secure CI/CD diagram against AWS docs and make its connections valid

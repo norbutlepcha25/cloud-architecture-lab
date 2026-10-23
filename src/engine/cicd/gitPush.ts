@@ -60,6 +60,46 @@ export function pushTargets(developer: N, nodes: N[], edges: E[]): N[] {
 
 /** Runs a git push from `developer` (undefined: a push event started at the repository itself). */
 export function runGitPush(developer: N | undefined, nodes: N[], edges: E[], scenario: SimulationScenario, repoOverride?: N): SimulationResult {
+  const result = runPushAndPrimaryTrigger(developer, nodes, edges, scenario, repoOverride);
+  const committed = result.steps.find(s => s.action === 'Commit pushed' && s.status === 'success');
+  const repo = committed && nodes.find(n => n.id === committed.targetNodeId);
+  const apps = repo ? linkedTargets(repo, nodes, edges, ['amplify'], 'amplify-cd') : [];
+  if (!repo || !apps.length) return result;
+  // A push notifies every subscriber: Amplify Hosting continuous deployment runs alongside the pipeline.
+  const branch = String((developer ? cfg(developer).branch : undefined) ?? cfg(repo).branch ?? 'main');
+  const outcomes = apps.map(app => amplifyJob(app, repo, branch, result.steps, developer ?? repo));
+  const failed = outcomes.includes(false);
+  return { ...result, success: result.success && !failed, statusCode: result.success && failed ? 500 : result.statusCode,
+    outcome: result.success && failed ? 'failure' : result.outcome, totalLatencyMs: result.totalLatencyMs + apps.length * 15,
+    summary: `${result.summary} Amplify Hosting: ${apps.map((app, i) => `${label(app)} ${outcomes[i] === true ? 'deployed' : outcomes[i] === false ? 'build failed' : 'not built'}`).join('; ')}.`,
+    path: [...new Set([...result.path, ...apps.map(a => a.id)])] };
+}
+
+/** Amplify Hosting continuous deployment for one connected app; true = deployed, false = failed,
+ *  undefined = not started. https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html */
+function amplifyJob(app: N, repo: N, branch: string, steps: SimulationStep[], owner: N): boolean | undefined {
+  const c = cfg(app), connected = String(c.branch ?? 'main');
+  const branchRef = 'https://docs.aws.amazon.com/amplify/latest/APIReference/API_Branch.html';
+  const add = (action: string, status: SimulationStep['status'], explanation: string, awsRule = branchRef) => {
+    const n = steps.length + 1, at = (steps[steps.length - 1]?.timestampMs ?? 0) + 5;
+    steps.push({ id: `amplify-step-${n}`, stepNumber: n, timestampMs: at, sourceNodeId: repo.id, targetNodeId: app.id,
+      sourceNodeName: label(repo), targetNodeName: label(app), protocol: 'HTTPS', action, status, explanation, targetHealth: app.data.health, latencyMs: 5,
+      details: { decision: { order: n, component: 'Service', resource: label(app), operation: action, input: { branch }, decision: status === 'success' ? 'ALLOW' : status === 'failed' ? 'DENY' : 'INFO',
+        reason: explanation, simpleExplanation: explanation, awsRule, metadata: { initiatedBy: owner.id } } as TraceEntry } });
+  };
+  if (branch !== connected) { add('Amplify: branch', 'bypassed', `${label(app)} is connected to branch ${connected}; the push to ${branch} does not start a build. Connect a branch (feature branch) to deploy it.`); return undefined; }
+  if (c.enableAutoBuild === false) { add('Amplify: auto build', 'bypassed', `Auto build is disabled for ${connected} (enableAutoBuild = false), so the push does not start a job. Start the job manually.`); return undefined; }
+  if (app.data.health === 'failed') { add('Amplify job', 'failed', `${label(app)} is unavailable; no job ran (teaching failure).`); return false; }
+  add('Amplify: job started', 'success', `Continuous deployment: the push to ${connected} on ${label(repo)} started a build job for ${label(app)}.`, 'https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html');
+  if (c.buildResult === 'FAILED') {
+    add('Amplify: build', 'failed', `A command in the build specification (amplify.yml) failed (simulated build input). Atomic deployment: the previously deployed version keeps serving.`);
+    return false;
+  }
+  add('Amplify: build and deploy', 'success', `Built with the app build specification and deployed atomically to the Amplify CDN: the site switches to the new version only after the whole deployment finishes. Build commands are simulated, not executed.`, 'https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html');
+  return true;
+}
+
+function runPushAndPrimaryTrigger(developer: N | undefined, nodes: N[], edges: E[], scenario: SimulationScenario, repoOverride?: N): SimulationResult {
   const steps: SimulationStep[] = [];
   const owner = developer ?? repoOverride!;
   const push = (target: N, action: string, ok: boolean, explanation: string, decision?: Partial<TraceEntry>) => {
@@ -172,8 +212,8 @@ export function runGitPush(developer: N | undefined, nodes: N[], edges: E[], sce
 }
 
 /** Targets reached from `from` over documented integration links (stable ID order). */
-function linkedTargets(from: N, nodes: N[], edges: E[], serviceIds: string[]): N[] {
+function linkedTargets(from: N, nodes: N[], edges: E[], serviceIds: string[], kind: 'git-push-events' | 'amplify-cd' = 'git-push-events'): N[] {
   const nodesById = new Map(nodes.map(n => [n.id, n]));
-  return edges.filter(e => e.source === from.id && isIntegrationLink(from, nodesById.get(e.target), e.data, 'git-push-events'))
+  return edges.filter(e => e.source === from.id && isIntegrationLink(from, nodesById.get(e.target), e.data, kind))
     .map(e => nodesById.get(e.target)!).filter(n => serviceIds.includes(sid(n)!)).sort(byId);
 }

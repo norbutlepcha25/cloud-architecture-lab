@@ -17,7 +17,7 @@ import { ManagedServicePanel } from './ManagedServicePanel.tsx';
 import { Ec2IamRolePanel, ROLE_PANEL_SERVICE_IDS } from './Ec2IamRolePanel.tsx';
 import { RouteTablePanel } from './RouteTablePanel.tsx';
 import { InternetGatewayPanel } from './InternetGatewayPanel.tsx';
-import { CodePipelinePanel, CodeCommitPanel, DeveloperPanel, GitProviderPanel, EventRulePanel, SignerPanel, CodeBuildPanel, CodeDeployPanel, CicdRolePanel, CICD_ROLE_SERVICE_IDS } from './CicdPanels.tsx';
+import { CodePipelinePanel, CodeCommitPanel, DeveloperPanel, GitProviderPanel, EventRulePanel, SignerPanel, AmplifyBranchPanel, CodeBuildPanel, CodeDeployPanel, CicdRolePanel, CICD_ROLE_SERVICE_IDS } from './CicdPanels.tsx';
 import { createTeachingNacl } from '../../engine/network/naclPreset.ts';
 import { NetworkIdentityPanel } from './NetworkIdentityPanel.tsx';
 import { relationshipKind, type RelationshipKind } from '../../engine/architecture/relationships.ts';
@@ -1501,6 +1501,7 @@ export const ServiceInspector: React.FC = () => {
             {profile.configuration === 'pipeline' && <InspectorAccordion title="Pipeline"><CodePipelinePanel node={selectedNode} nodes={nodes} edges={edges} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
             {profile.configuration === 'repo' && <InspectorAccordion title="Repository"><CodeCommitPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
             {nodeData.serviceId === 'eventbridge' && <InspectorAccordion title="Rule: CodeCommit events"><EventRulePanel node={selectedNode} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
+            {profile.configuration === 'amplify' && <InspectorAccordion title="Hosting branch"><AmplifyBranchPanel node={selectedNode} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
             {profile.configuration === 'signer' && <InspectorAccordion title="Signing"><SignerPanel node={selectedNode} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} /></InspectorAccordion>}
             {profile.configuration === 'developer' && <InspectorAccordion title="Git push"><DeveloperPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}
             {profile.configuration === 'gitprovider' && <InspectorAccordion title="Repository connection"><GitProviderPanel node={selectedNode} nodes={nodes} edges={edges} onConfig={patch => updateNodeData(selectedNode.id, { customConfig: { ...nodeData.customConfig, ...patch } })} onRun={() => runFromNode(selectedNode.id)} /></InspectorAccordion>}

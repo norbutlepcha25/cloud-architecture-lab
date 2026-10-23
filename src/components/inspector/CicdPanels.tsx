@@ -134,6 +134,26 @@ export function SignerPanel({ node, onConfig }: Pick<Props, 'node' | 'onConfig'>
   </section>;
 }
 
+/** Amplify Hosting branch settings; job decisions live in engine/cicd/gitPush.ts. */
+export function AmplifyBranchPanel({ node, onConfig }: Pick<Props, 'node' | 'onConfig'>) {
+  const c = cfg(node);
+  return <section className="space-y-3 text-xs">
+    <label className="block font-semibold text-slate-700">Connected branch
+      <input className={field} value={c.branch ?? 'main'} onChange={e => onConfig({ branch: e.target.value })} />
+    </label>
+    <label className="flex items-center gap-2 text-slate-700">
+      <input type="checkbox" checked={c.enableAutoBuild !== false} onChange={e => onConfig({ enableAutoBuild: e.target.checked })} />
+      Auto build on push (enableAutoBuild)
+    </label>
+    <label className="block font-semibold text-slate-700">Build result (simulated)
+      <select className={field} value={c.buildResult ?? 'SUCCEEDED'} onChange={e => onConfig({ buildResult: e.target.value })}>
+        <option value="SUCCEEDED">Succeeds</option><option value="FAILED">Fails (previous version keeps serving)</option>
+      </select>
+    </label>
+    <p className="text-slate-500">Connect a CodeCommit, GitHub, GitLab or Bitbucket repository to this app. A push to the connected branch builds and deploys it, alongside any pipeline.</p>
+  </section>;
+}
+
 export function CodeBuildPanel({ node, nodes, edges, onConfig, onRun }: Props & { onRun: () => void }) {
   const c = cfg(node);
   const pushes = edges.some(e => e.source === node.id && nodes.find(n => n.id === e.target)?.data.serviceId === 'ecr_registry' && isCicdWorkflowLink(node, nodes.find(n => n.id === e.target), e.data));
