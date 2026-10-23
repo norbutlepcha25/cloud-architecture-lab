@@ -248,3 +248,5 @@ EKS's control-plane fee) don't change with region, by design.
 - Coupling Mode changes what a downstream failure does to the caller — if you want to demonstrate
   a resilience improvement, try switching a synchronous dependency to asynchronous and re-running
   the same failure scenario.
+
+- NTL
