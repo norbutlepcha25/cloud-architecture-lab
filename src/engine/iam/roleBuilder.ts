@@ -20,7 +20,12 @@ export const SERVICE_ACTIONS: Record<string, string[]> = {
   sns: ['sns:Publish'],
   lambda: ['lambda:InvokeFunction'],
   kms: ['kms:DescribeKey', 'kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
-  secrets_manager: ['secretsmanager:GetSecretValue']
+  secrets_manager: ['secretsmanager:GetSecretValue'],
+  // Database data-plane actions authorized on the caller role (docs/behavior/<id>.md).
+  keyspaces: ['cassandra:Select', 'cassandra:Modify'],
+  aurora_dsql: ['dsql:DbConnect', 'dsql:DbConnectAdmin'],
+  neptune_analytics: ['neptune-graph:ReadDataViaQuery', 'neptune-graph:WriteDataViaQuery'],
+  opensearch_db: ['es:ESHttpGet', 'es:ESHttpPost']
 };
 
 const TRANSPARENT_HOPS = ['s3_gateway_endpoint', 'privatelink', 'nat_gateway', 'internet_gateway'];

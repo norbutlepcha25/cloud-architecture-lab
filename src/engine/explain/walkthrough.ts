@@ -7,6 +7,7 @@ import { queueSettings, queueConsumers, evaluateConsumer } from '../messaging/sq
 import { runPipelineExecution, runStandaloneDeveloperTool, resolvePipelineStages, deploymentInstances, instanceDeploymentProblems, ec2DeploymentSucceeds } from '../cicd/pipeline.ts';
 import { evaluateInternetEgress, routingOptions } from '../network/subnetRouting.ts';
 import { findContainingSubnetBoundary } from '../layout/containment.ts';
+import { dmsEndpoints, runDmsReplicationTask } from '../database/dms.ts';
 
 /**
  * Step-by-step explanations of multi-step AWS behavior, built from the same engine decisions the
@@ -220,4 +221,17 @@ export function serviceOperationWalkthrough(target:N,nodes:N[],edges:E[],scenari
   const result=runServiceOperation(selected,patched,edges,{...scenario,startNodeId:target.id});
   return {title:`${SERVICE_OPERATIONS[target.data.serviceId].name} operation`,summary:result.summary,lanes:[{id:'operation',label:'Caller → service operation'}],
     frames:result.steps.map(step=>({lane:'operation',title:step.action,detail:step.explanation,status:step.status==='failed'?'fail':step.status==='bypassed'?'info':'ok',source:step.details?.decision?.awsRule?.match(/https?:\/\/\S+/)?.[0]}))};
+}
+
+/** DMS replication task from the same engine run; what-if: the source endpoint fails (clone only). */
+export function dmsWalkthrough(dms: N, nodes: N[], edges: E[], scenario: SimulationScenario, whatIf: { sourceFails?: boolean } = {}): Walkthrough {
+  const source = dmsEndpoints(dms, nodes, edges).sources[0];
+  const patched = structuredClone(nodes).map(n => whatIf.sourceFails && n.id === source?.id ? clone(n, { health: 'failed' }) : n);
+  const result = runDmsReplicationTask(patched.find(n => n.id === dms.id)!, patched, edges, { ...scenario, startNodeId: dms.id });
+  const ids = [...new Set(result.steps.map(step => step.targetNodeId))];
+  return { title: `${label(dms)} replication task`, summary: result.summary,
+    lanes: ids.map(id => ({ id, label: label(patched.find(n => n.id === id)) })),
+    frames: result.steps.map(step => ({ lane: step.targetNodeId, title: step.action, detail: step.explanation,
+      status: step.status === 'success' ? 'ok' : step.status === 'bypassed' ? 'info' : 'fail',
+      source: step.details?.decision?.awsRule?.match(/https?:\/\/\S+/)?.[0] })) };
 }

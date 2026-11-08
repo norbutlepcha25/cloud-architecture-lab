@@ -11,7 +11,8 @@ export function fixture(id:string) {
   const d=SERVICE_OPERATIONS[id], source=svc('caller','lambda'), target=svc('target',id);
   target.data.customConfig.operationLab=operationSample(id);
   target.data.customConfig.resourceArn = id==='cloudwatch' ? '*' : id==='acm' ? d.resource.CertificateArn : `arn:aws:${id==='eventbridge'?'events':id==='secrets_manager'?'secretsmanager':id}:us-east-1:000000000000:${id==='kms'?'key/':''}target`;
-  if(d.iam) source.data.iamRole=buildRole('lambda','caller-role',[{target,actions:d.actions}]);
+  if(d.iam || d.privateIam) source.data.iamRole=buildRole('lambda','caller-role',[{target,actions:d.actions}]);
+
   const nodes=[source,target];
   if(!d.iam) {
     const box=(id:string,boundaryType:string,x:number,y:number,w:number,h:number,cidr:string):any=>({id,type:'boundaryNode',position:{x,y},width:w,height:h,data:{boundaryType,label:id,cidr}});
@@ -22,6 +23,23 @@ export function fixture(id:string) {
     source.data.networkIdentity={privateIp:'10.0.1.10'}; target.data.networkIdentity={privateIp:'10.0.1.20'};
   }
   const edges:any[]=[{id:'call',source:source.id,target:target.id,data:{protocol:d.protocol,relationship:'request'}}];
+  // Neptune Analytics graphs have public connectivity disabled by default: the caller uses the
+  // graph's private (interface) endpoint inside its VPC.
+  if(id==='neptune_analytics') {
+    nodes.push({id:'vpc',type:'boundaryNode',position:{x:0,y:1000},width:1400,height:650,data:{boundaryType:'vpc',label:'vpc',cidr:'10.0.0.0/16'}},
+      {id:'subnet',type:'boundaryNode',position:{x:20,y:1050},width:1300,height:500,data:{boundaryType:'private_subnet',label:'subnet',cidr:'10.0.1.0/24'}},
+      {id:'graph-endpoint',type:'serviceNode',position:{x:700,y:1150},width:100,height:90,data:{serviceId:'privatelink',label:'graph-endpoint',health:'healthy',subnet:'private',customConfig:{endpointService:'neptune_analytics'}}});
+    source.position={x:100,y:1150}; source.width=100; source.height=90; source.data.subnet='private';
+  }
+  // RDS Proxy prerequisites: its secret, its own role (trusted by rds.amazonaws.com) and a writer target.
+  if(id==='rds_proxy') {
+    const secret=svc('secret','secrets_manager'), writer=svc('writer','aurora');
+    writer.position={x:1100,y:1150}; writer.width=100; writer.height=90; writer.data.subnet='private'; writer.data.networkIdentity={privateIp:'10.0.1.30'};
+    target.data.iamRole={id:'proxy-role',trustPolicy:{id:'t',kind:'trust',statements:[{effect:'Allow',principals:['rds.amazonaws.com'],actions:['sts:AssumeRole'],resources:['*']}]},
+      identityPolicies:[{id:'p',kind:'identity',statements:[{effect:'Allow',actions:['secretsmanager:GetSecretValue'],resources:['*']}]}]};
+    nodes.push(secret,writer);
+    edges.push({id:'secret',source:'target',target:'secret',data:{protocol:'Event',relationship:'manages'}},{id:'writer',source:'target',target:'writer',data:{protocol:'Event',relationship:'manages'}});
+  }
   const scenario:any={id:`op-${id}`,name:id,startNodeId:'target',method:'POST',path:'/',trafficLevel:'normal'};
   return {source,target,nodes,edges,scenario};
 }

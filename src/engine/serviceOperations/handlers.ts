@@ -1,6 +1,10 @@
 import type { Node, Edge } from '@xyflow/react';
 import { operate, type Runtime } from '../services/operations.ts';
 import { bytes, object, reject, unsupported, OperationError, type OperationSettings, type OperationOutput } from './types.ts';
+import { isIntegrationLink } from '../architecture/serviceIntegrations.ts';
+import { evaluateServiceRole } from '../cicd/pipeline.ts';
+import { evaluateApplicationHop } from '../simulation/applicationHop.ts';
+import { SimulationTrace } from '../simulation/adapters/types.ts';
 export interface OperationContext extends OperationSettings {
   id: string; runtime: Runtime; nodes: Node<any>[]; edges: Edge<any>[];
   authorizeKey: (id: string, action: string) => void;
@@ -37,7 +41,8 @@ function itemAttributes(item: unknown, name: string): Record<string, any> {
   return item;
 }
 const dynamodb: Handler = ctx => {
-  available(ctx.resource, 'ACTIVE');
+  // "The table/index remains available for data operations when UPDATING." (API TableDescription)
+  if (!['ACTIVE', 'UPDATING'].includes(ctx.resource.status)) throw new OperationError(503, `Table status is ${ctx.resource.status ?? 'unspecified'}; data operations require ACTIVE (or UPDATING).`);
   const pk = value(ctx.resource.partitionKey, 'partitionKey');
   if (ctx.resource.sortKey) return unsupported('Composite keys are outside this single-string-key slice.');
   if (ctx.request.ConditionExpression || ctx.request.ProjectionExpression) return unsupported('DynamoDB expressions are not modeled.');
@@ -107,18 +112,18 @@ const metrics: Handler = ctx => {
   return { response: {}, runtime: metadata(ctx), notes: ['Metric ingestion does not immediately evaluate alarms or prove metric query availability.'] };
 };
 
-const connect: Handler = ctx => {
+/** Private endpoint connection; `ready` lists the documented states that accept connections. */
+const connectWhen = (ready: string[]): Handler => ctx => {
   if (ctx.id && !Number.isInteger(ctx.resource.port)) return reject('Configure an integer endpoint port.');
   if (ctx.resource.port < 1 || ctx.resource.port > 65535) return reject('Endpoint port must be 1–65535.');
-  available(ctx.resource, 'available');
+  if (!ready.includes(ctx.resource.status)) throw new OperationError(503, `Resource status is ${ctx.resource.status ?? 'unspecified'}; connections are accepted only when ${ready.join(' or ')}.`);
   if (ctx.resource.iamAuthentication === true) return unsupported('IAM database authentication is outside this connection slice.');
   if (ctx.resource.credentialsValid === false) throw new OperationError(403, 'Database credentials were rejected (authored training input, not an IAM decision).');
   if (ctx.resource.credentialsValid !== undefined && typeof ctx.resource.credentialsValid !== 'boolean') return reject('credentialsValid must be a boolean.');
   return { response: { connected: true, port: ctx.resource.port }, notes: ['Connection accepted in the bounded model. SQL/graph query execution, password exchange and TLS negotiation are not implemented.'] };
 };
-const cache: Handler = ctx => {
-  connect(ctx);
-  if (ctx.resource.engine !== 'redis') return unsupported('Only Redis OSS string GET/SET is modeled.');
+const connect = connectWhen(['available']);
+const stringStore = (ctx: OperationContext): OperationOutput => {
   const key = value(ctx.request.key, 'key');
   if (ctx.action === 'SET') {
     if (typeof ctx.request.value !== 'string') return reject('SET value must be a string.');
@@ -128,6 +133,66 @@ const cache: Handler = ctx => {
     return { response: { result: 'OK' }, runtime: metadata(ctx) };
   }
   return { response: { value: ctx.runtime.records.find(r => r.key === key)?.value ?? null } };
+};
+const cache: Handler = ctx => {
+  connect(ctx);
+  if (ctx.resource.engine !== 'redis') return unsupported('Only Redis OSS string GET/SET is modeled.');
+  return stringStore(ctx);
+};
+
+// ---- Database services (sources verified 2026-11-08; see docs/behavior/<id>.md) ----
+
+/** Aurora: cluster (writer) endpoint; default ports Aurora MySQL 3306 / Aurora PostgreSQL 5432. */
+const AURORA_PORTS: Record<string, number> = { 'aurora-postgresql': 5432, 'aurora-mysql': 3306 };
+const aurora: Handler = ctx => {
+  if (!AURORA_PORTS[ctx.resource.engine]) return unsupported('Choose engine aurora-postgresql or aurora-mysql.');
+  return connect(ctx);
+};
+/** Serverless v2 auto-pause: at 0 ACU minimum a paused instance resumes on any connection attempt,
+ *  even one with invalid credentials, and still reports status available. */
+const auroraServerless: Handler = ctx => {
+  const min = ctx.resource.minCapacityAcu;
+  if (typeof min !== 'number' || min < 0) return reject('minCapacityAcu must be a number of ACUs (0 enables auto-pause).');
+  if (ctx.resource.paused === true && min !== 0) return reject('Only a cluster with minimum capacity 0 ACU can be auto-paused.');
+  const notes: string[] = [];
+  if (ctx.resource.paused === true) notes.push('The instance was auto-paused (0 ACU). The connection attempt resumed it; AWS documents a typical resume time of about 15 seconds (30 s or more after a long pause).');
+  try { const output = aurora(ctx); return { ...output, response: { ...output.response, resumed: ctx.resource.paused === true }, notes: [...notes, ...(output.notes ?? [])] }; }
+  catch (error) { if (notes.length && error instanceof OperationError) error.message = `${notes[0]} ${error.message}`; throw error; }
+};
+const documentdb: Handler = ctx => {
+  if (typeof ctx.resource.tls !== 'boolean') return reject('tls must be true or false (the cluster tls parameter; enabled by default).');
+  return connectWhen(['available', 'active'])(ctx);
+};
+const memorydb: Handler = ctx => { connect(ctx); return stringStore(ctx); };
+/** Serverless: 6379 primary (read/write), 6380 read-from-replica; TLS always on. */
+const elasticacheServerless: Handler = ctx => {
+  if (ctx.resource.connectionType === 'public') return unsupported('Public serverless endpoints (TLS 1.3, IAM-only user groups) are outside this VPC slice.');
+  if (ctx.resource.connectionType !== 'vpc') return reject('connectionType must be vpc or public.');
+  if (ctx.resource.tls === false) return reject('All ElastiCache Serverless caches have in-transit encryption enabled; it cannot be turned off.');
+  if (![6379, 6380].includes(ctx.resource.port)) return reject('ElastiCache Serverless uses port 6379 (primary) and 6380 (read from replica).');
+  connectWhen(['AVAILABLE'])(ctx);
+  if (ctx.resource.port === 6380 && ctx.action === 'SET') return reject('Port 6380 is the read-from-replica endpoint; send writes to 6379.');
+  return stringStore(ctx);
+};
+const timestream = connectWhen(['AVAILABLE']);
+/** Redshift Serverless workgroups listen on 5431–5455 or 8191–8215 (default 5439). */
+const redshiftServerless: Handler = ctx => {
+  const p = ctx.resource.port;
+  if (!((p >= 5431 && p <= 5455) || (p >= 8191 && p <= 8215))) return reject('Redshift Serverless ports are 5431–5455 or 8191–8215 (default 5439).');
+  return connectWhen(['AVAILABLE'])(ctx);
+};
+/** Regional APIs authorized by IAM in the runner; the handler checks resource state only. */
+const regionalState = (ready: string[], unknownNote?: string): Handler => ctx => {
+  if (!ready.includes(ctx.resource.status)) {
+    if (unknownNote) throw new OperationError(501, `${unknownNote} Status ${ctx.resource.status ?? 'unspecified'} is not modeled.`);
+    throw new OperationError(503, `Resource status is ${ctx.resource.status ?? 'unspecified'}; requests require ${ready.join(' or ')}.`);
+  }
+  return { response: { accepted: true, action: ctx.action }, notes: ['Authorized and accepted in the bounded model; query/statement execution is not implemented.'] };
+};
+const opensearch: Handler = ctx => {
+  if (ctx.resource.port !== 443 && ctx.resource.port !== 80) return reject('OpenSearch Service accepts connections only on port 443 (HTTPS) or 80 (HTTP).');
+  if (!['open', 'iam'].includes(ctx.resource.accessPolicy)) return reject('accessPolicy must be open or iam.');
+  return { response: { accepted: true, action: ctx.action }, notes: ['Search/index request accepted in the bounded model; documents and queries are not simulated.'] };
 };
 
 const keyMetadata: Handler = ctx => {
@@ -158,5 +223,47 @@ const secret: Handler = ctx => {
 
 export const OPERATION_HANDLERS: Record<string, Handler> = {
   sns: publish, rds: connect, dynamodb, neptune: connect, redshift: connect, kinesis,
-  eventbridge: events, elasticache: cache, cloudwatch: metrics, kms: keyMetadata, acm: certificate, secrets_manager: secret
+  eventbridge: events, elasticache: cache, cloudwatch: metrics, kms: keyMetadata, acm: certificate, secrets_manager: secret,
+  aurora, aurora_serverless: auroraServerless, documentdb, memorydb, elasticache_serverless: elasticacheServerless, timestream,
+  redshift_serverless: redshiftServerless, opensearch_db: opensearch,
+  keyspaces: regionalState(['ACTIVE']), neptune_analytics: regionalState(['AVAILABLE']),
+  aurora_dsql: regionalState(['ACTIVE'], 'Which Aurora DSQL cluster states accept connections is UNKNOWN in AWS documentation; only ACTIVE is modeled.'),
+  rds_proxy: ctx => proxyConnect(ctx)
 };
+
+/** RDS Proxy default endpoint: listens on the engine-family port, reads its Secrets Manager secret
+ *  with its own role (trusted by rds.amazonaws.com), then opens a connection to the writer target.
+ *  https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.html
+ *  https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy-iam-setup.html */
+const PROXY_PORTS: Record<string, number> = { POSTGRESQL: 5432, MYSQL: 3306 };
+function proxyConnect(ctx: OperationContext): OperationOutput {
+  const family = ctx.resource.engineFamily;
+  if (!PROXY_PORTS[family]) return unsupported('Choose engineFamily POSTGRESQL or MYSQL; SQL Server proxies are outside this slice.');
+  if (ctx.resource.port !== PROXY_PORTS[family]) return reject(`RDS Proxy listens on port ${PROXY_PORTS[family]} for ${family}.`);
+  connect(ctx);
+  const proxy = ctx.nodes.find(n => n.id === ctx.id)!;
+  const linked = (serviceIds: string[]) => ctx.edges.filter(e => e.source === proxy.id)
+    .map(e => ({ edge: e, node: ctx.nodes.find(n => n.id === e.target) }))
+    .filter(({ edge, node }) => node && serviceIds.includes(node.data.serviceId) && isIntegrationLink(proxy, node, edge.data))
+    .sort((a, b) => a.node!.id.localeCompare(b.node!.id));
+  const secret = linked(['secrets_manager'])[0]?.node;
+  if (!secret) return reject('Connect the proxy to the Secrets Manager secret that holds the database credentials (required unless end-to-end IAM authentication is used, which is outside this slice).');
+  if (secret.data.health === 'failed') throw new OperationError(503, `${secret.data.label} is unavailable, so the proxy cannot read database credentials.`);
+  const secretArn = String(secret.data.customConfig?.resourceArn ?? `arn:aws:secretsmanager:us-east-1:000000000000:secret:${secret.id}`);
+  const role = evaluateServiceRole(proxy, ['secretsmanager:GetSecretValue'], secretArn);
+  if (role.decision === 'DENY') throw new OperationError(403, `Proxy role cannot read the secret: ${role.reason}`);
+  if (role.decision === 'NOT_EVALUATED') return reject(`${proxy.data.label} has no IAM role. RDS Proxy needs a role trusted by rds.amazonaws.com that allows secretsmanager:GetSecretValue (and kms:Decrypt for a customer managed key).`);
+  const targetLink = linked(['rds', 'aurora', 'aurora_serverless'])[0];
+  if (!targetLink) return reject('Connect the proxy to its target database (the writer instance or Aurora cluster).');
+  const target = targetLink.node!;
+  if (target.data.health === 'failed') throw new OperationError(503, `Target ${target.data.label} is unavailable; the proxy has no writer to connect to.`);
+  const status = (() => { try { const raw = target.data.customConfig?.operationLab?.resource; const r = typeof raw === 'string' ? JSON.parse(raw) : raw; return r?.status; } catch { return undefined; } })();
+  if (status !== undefined && status !== 'available') throw new OperationError(503, `Target ${target.data.label} status is ${status}; it must be available.`);
+  const trace = new SimulationTrace();
+  const hop = { ...targetLink.edge, data: { ...targetLink.edge.data, protocol: 'SQL', destinationPort: PROXY_PORTS[family] } };
+  if (evaluateApplicationHop({ source: proxy, target, protocol: 'SQL', nodes: ctx.nodes, path: [proxy], enforceIam: false, trace, connection: hop as any })) {
+    throw new OperationError(trace.finalStatusCode, `Proxy → ${target.data.label}: ${trace.finalSummary} The target security group must allow the proxy on port ${PROXY_PORTS[family]}.`);
+  }
+  return { response: { connected: true, port: ctx.resource.port, target: target.id },
+    notes: [`Proxy role ${proxy.data.iamRole?.id} read ${secret.data.label} (${role.reason})`, `Proxy connected to writer target ${target.data.label} on port ${PROXY_PORTS[family]}; security groups allowed it.`, 'Connection pooling, multiplexing and pinning are not simulated.'] };
+}

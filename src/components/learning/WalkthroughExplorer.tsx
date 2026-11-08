@@ -4,11 +4,11 @@ import type { Node, Edge } from '@xyflow/react';
 import type { ServiceNodeData, SimulationScenario } from '../../types/index.ts';
 import { Modal } from '../ui/Modal.tsx';
 import { WalkthroughView } from './WalkthroughView.tsx';
-import { pipelineWalkthrough, serviceOperationWalkthrough, xrayWalkthrough, codeDeployWalkthrough, standaloneDeveloperToolWalkthrough, networkPathWalkthrough } from '../../engine/explain/walkthrough.ts';
+import { pipelineWalkthrough, dmsWalkthrough, serviceOperationWalkthrough, xrayWalkthrough, codeDeployWalkthrough, standaloneDeveloperToolWalkthrough, networkPathWalkthrough } from '../../engine/explain/walkthrough.ts';
 import { EC2_DEPLOYMENT_CONFIGS, ECS_DEPLOYMENT_CONFIGS, LAMBDA_DEPLOYMENT_CONFIGS, deploymentInstances, pipelinesTriggeredBy, resolvePipelineStages } from '../../engine/cicd/pipeline.ts';
 
 /** Services whose multi-step behavior is explained by an engine-built walkthrough overlay. */
-export const WALKTHROUGH_SERVICES = [...Object.keys(SERVICE_OPERATIONS), 'xray', 'codepipeline', 'codecommit', 'codebuild', 'codedeploy', 'route_tables', 'nat_gateway', 'internet_gateway'];
+export const WALKTHROUGH_SERVICES = [...Object.keys(SERVICE_OPERATIONS), 'xray', 'codepipeline', 'codecommit', 'codebuild', 'codedeploy', 'route_tables', 'nat_gateway', 'internet_gateway', 'dms'];
 
 export function WalkthroughExplorer({ node, nodes, edges, scenario, onClose }: {
   node: Node<ServiceNodeData>; nodes: Node<ServiceNodeData>[]; edges: Edge<any>[]; scenario: SimulationScenario; onClose: () => void;
@@ -26,6 +26,7 @@ export function WalkthroughExplorer({ node, nodes, edges, scenario, onClose }: {
 
   const walkthrough = useMemo(() => {
     if (SERVICE_OPERATIONS[service]) return serviceOperationWalkthrough(node,nodes,edges,scenario,{callerFails:publisherFails});
+    if (service === 'dms') return dmsWalkthrough(node, nodes, edges, scenario, { sourceFails: publisherFails });
     if (service === 'xray') return xrayWalkthrough(node, nodes, edges, scenario, { publisherFails });
     if (['codebuild', 'codecommit'].includes(service) && !pipeline) return standaloneDeveloperToolWalkthrough(node, nodes, edges, scenario, { buildFails });
     if (service === 'codedeploy' && (node.data.customConfig?.revisionBucketId || !pipeline)) return standaloneDeveloperToolWalkthrough(node, nodes, edges, scenario, { config, failInstanceId: failInstanceId || undefined });
@@ -39,6 +40,7 @@ export function WalkthroughExplorer({ node, nodes, edges, scenario, onClose }: {
   return <Modal isOpen onClose={onClose} title={node.data.label} meta="How it works · what-if changes do not edit your diagram" size="xl" closeLabel="Close walkthrough">
     <div className="space-y-4">
       <div className="flex flex-wrap gap-4 text-xs text-slate-700">
+        {service === 'dms' && <label className="flex items-center gap-2"><input type="checkbox" checked={publisherFails} onChange={e => setPublisherFails(e.target.checked)} />What if the source database fails</label>}
         {(service === 'xray' || SERVICE_OPERATIONS[service]) && <label className="flex items-center gap-2"><input type="checkbox" checked={publisherFails} onChange={e => setPublisherFails(e.target.checked)} />What if the publisher fails</label>}
         {(pipeline || service === 'codebuild') && <label className="flex items-center gap-2"><input type="checkbox" checked={buildFails === true} onChange={e => setBuildFails(e.target.checked ? true : undefined)} />What if the build fails</label>}
         {service === 'codedeploy' && <>

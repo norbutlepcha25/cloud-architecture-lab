@@ -31,3 +31,10 @@ Not implemented: item keys/data/storage, query/scan, consistency, capacity/throt
 ## Verification and integration
 
 Run dependency-workflow, DIT reference and execution-consistency tests, the networking conformance suite, then npm test and npm run build. DIT regression verifies the child operation precedes the original S3 forwarding path; cross-context tests verify teaching context does not change supported execution. Existing JSON connection fields are preserved; new correlation evidence is optional for older saved runs.
+
+## Database operation pass — 2026-11-08
+
+Table status: data operations are accepted when ACTIVE or UPDATING ("The table/index remains available
+for data operations when UPDATING", [TableDescription](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TableDescription.html));
+other states (e.g. ARCHIVING) return 503. Tests: DB-DDB-STATUS-001/002 and DB-DYNAMODB-OK-001 in
+tests/aws-conformance/databases/database-operations.test.ts.

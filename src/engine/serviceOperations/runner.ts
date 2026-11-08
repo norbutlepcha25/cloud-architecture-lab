@@ -64,11 +64,15 @@ export function runServiceOperation(target: Node<ServiceNodeData>, nodes: Node<S
       const route = evaluateInternetEgress(source,target.data.serviceId,nodes,routingOptions(scenario));
       if (route.outcome !== 'allowed' && route.outcome !== 'legacy') throw new OperationError(route.outcome === 'invalid' ? 400 : 504,route.reason);
       if (source.data.serviceId === 'lambda' && route.outcome === 'allowed' && route.via === 'igw') throw new OperationError(504,'VPC Lambda cannot use an IGW alone; use NAT or a matching interface endpoint.');
+      const routeDenial = d.routeCheck?.(settings.resource, route);
+      if (routeDenial) throw new OperationError(504, routeDenial);
       record('Regional API route',true,route.reason || 'Managed/public endpoint reachability assumed outside modeled VPC routing.',{ route, coverage: 'route only; egress/return packet controls remain partial' },'Route');
     }
     const evaluatedLink = { ...link, data: { ...link.data, destinationPort: port } } as Edge<ConnectionData>;
     if (evaluateApplicationHop({ source,target,protocol:d.protocol,nodes,path:[source],enforceIam:false,trace,connection:evaluatedLink })) return finish(trace.finalStatusCode,trace.finalSummary);
-    if (d.iam) {
+    // OpenSearch VPC domain: an IAM-based access policy needs signed requests the caller role allows.
+    if (d.privateIam && settings.resource.accessPolicy === 'open') record('Domain access policy',true,'Open domain access policy: in a VPC domain, security groups control access and requests need not be signed.',{},'IAM');
+    if (d.iam || (d.privateIam && settings.resource.accessPolicy === 'iam')) {
       const auth = authorizeApplicationHop(source,target,d.protocol,settings.action);
       record('Operation IAM authorization',auth.decision === 'ALLOW',auth.reason,auth.metadata,'IAM');
       if (auth.decision !== 'ALLOW') return finish(403,auth.reason);

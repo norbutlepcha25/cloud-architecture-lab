@@ -21,10 +21,22 @@ export interface ServiceIntegration {
   permissions?: string[];
   /** Target-dependent permissions (e.g. Signer differs for container images and Lambda code). */
   permissionsFor?: (targetConfig: Record<string, any>) => string[];
-  executes?: 'git-push-events' | 'codebuild-dependency' | 'codedeploy-alarm' | 'amplify-cd';
+  executes?: 'git-push-events' | 'codebuild-dependency' | 'codedeploy-alarm' | 'amplify-cd' | 'proxy' | 'dms-endpoint';
 }
 
 export const SERVICE_INTEGRATIONS: ServiceIntegration[] = [
+  { from: ['rds_proxy'], to: ['secrets_manager'], executes: 'proxy', permissions: ['secretsmanager:GetSecretValue'],
+    meaning: 'RDS Proxy reads database credentials from this secret with its own IAM role (trusted by rds.amazonaws.com).',
+    source: 'https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy-secrets-arns.html' },
+  { from: ['rds_proxy'], to: ['rds', 'aurora', 'aurora_serverless'], executes: 'proxy',
+    meaning: 'Proxy target: the default read/write endpoint connects to the writer instance; the target must be in the same VPC and allow the proxy in its security group.',
+    source: 'https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy.howitworks.html' },
+  { from: ['rds', 'aurora', 'aurora_serverless', 'documentdb'], to: ['dms'], executes: 'dms-endpoint',
+    meaning: 'DMS source endpoint: the replication instance reads from this database (its security group must allow the replication instance on the database port).',
+    source: 'https://docs.aws.amazon.com/dms/latest/userguide/CHAP_ReplicationInstance.VPC.html' },
+  { from: ['dms'], to: ['rds', 'aurora', 'aurora_serverless', 'documentdb'], executes: 'dms-endpoint',
+    meaning: 'DMS target endpoint: the replication instance writes to this database.',
+    source: 'https://docs.aws.amazon.com/dms/latest/userguide/CHAP_ReplicationInstance.VPC.html' },
   { from: ['codecommit'], to: ['eventbridge'], executes: 'git-push-events',
     meaning: 'CodeCommit sends repository state change events (for example a branch update after a push) to EventBridge.',
     source: 'https://docs.aws.amazon.com/codecommit/latest/userguide/monitoring-events.html' },
@@ -107,4 +119,12 @@ export function isIntegrationLink(source: Node<any> | undefined, target: Node<an
   if (data?.referenceAnnotation || data?.signalType === 'outbound_response' || data?.action || data?.destinationPort !== undefined) return false;
   const relation = relationshipKind(data);
   return (relation === 'manages' || relation === 'request') && (data?.protocol === undefined || data.protocol === 'HTTPS' || data.protocol === 'Event');
+}
+
+/** Services AWS has removed from its portfolio: every relationship is rejected with the notice. */
+export const RETIRED_SERVICES: Record<string, string> = {
+  qldb: 'Amazon QLDB reached end of support on July 31, 2025 and was fully shut down; it no longer accepts requests. For a verifiable history consider Aurora PostgreSQL (with an audit design) or DynamoDB streams. https://docs.aws.amazon.com/general/latest/gr/full_shutdown_services.html'
+};
+export function retiredServiceReason(source?: Node<any>, target?: Node<any>): string | undefined {
+  return RETIRED_SERVICES[target?.data?.serviceId] ?? RETIRED_SERVICES[source?.data?.serviceId];
 }

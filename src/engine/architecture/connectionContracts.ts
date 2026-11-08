@@ -1,7 +1,7 @@
 import { SERVICE_OPERATIONS, OPERATION_CALLERS, operationMode } from '../serviceOperations/definitions.ts';
 import { XRAY_PUBLISHERS } from '../observability/xrayDocuments.ts';
 import { cicdRelationship } from './cicdRelationships.ts';
-import { nonIntegrationReason, serviceIntegration } from './serviceIntegrations.ts';
+import { nonIntegrationReason, retiredServiceReason, serviceIntegration } from './serviceIntegrations.ts';
 export { cicdRelationship } from './cicdRelationships.ts';
 import { isEksManagementPair } from './eksRelationships.ts';
 import type { Node } from '@xyflow/react';
@@ -13,6 +13,10 @@ import { isExternalActor } from './externalActors.ts';
 const inputs: Record<string, ProtocolType[]> = {
   kms: ['HTTPS'], secrets_manager: ['HTTPS'], acm: ['HTTPS'], kinesis: ['HTTPS'], neptune: ['HTTPS'], redshift: ['SQL','TCP'],
   xray: ['HTTPS'],
+  // Database services (docs/behavior/<id>.md): endpoint protocols of the modeled operations.
+  aurora_serverless: ['SQL', 'TCP'], rds_proxy: ['SQL', 'TCP'], aurora_dsql: ['SQL', 'TCP'], redshift_serverless: ['SQL', 'TCP'],
+  documentdb: ['TCP'], memorydb: ['TCP'], elasticache_serverless: ['TCP'], keyspaces: ['TCP'],
+  timestream: ['HTTPS'], opensearch_db: ['HTTPS'], neptune_analytics: ['HTTPS'],
   amplify: ['HTTPS', 'HTTP'],
   s3: ['HTTPS', 'HTTP', 'Object access'], sqs: ['HTTPS', 'Message'], sns: ['HTTPS', 'Message', 'Event'],
   rds: ['SQL', 'TCP'], aurora: ['SQL', 'TCP'], dynamodb: ['HTTPS'], elasticache: ['TCP'],
@@ -49,7 +53,7 @@ export function isManagementPair(source?: Node<any>, target?: Node<any>): boolea
 }
 export function connectionProtocols(source?: Node<any>, target?: Node<any>): ProtocolType[] {
   if (!source || !target) return [];
-  if (nonIntegrationReason(source, target)) return [];
+  if (nonIntegrationReason(source, target) || retiredServiceReason(source, target)) return [];
   if (serviceIntegration(source, target)) return ['Event', 'HTTPS'];
   if (operationMode(target.data.serviceId,target.data.customConfig)) return OPERATION_CALLERS.includes(source.data.serviceId) ? [SERVICE_OPERATIONS[target.data.serviceId].protocol] : [];
   if (source.data.serviceId === 'xray') return [];
@@ -73,7 +77,7 @@ export function checkConnection(source: Node<any> | undefined, target: Node<any>
   if (target.data.serviceId === 'xray' && kind === 'dependency') return bad('X-Ray supports explicit PutTraceSegments request links; automatic telemetry/dependency execution is not modeled.');
   if (kind === 'authorization') return isAuthorizationPair(source, target) ? { status: 'valid', reason: 'Authorization illustration, not a network hop. This line does not grant access; configured policies determine permission. Send the actual request directly to S3.' } : bad('Unsupported authorization illustration for this pair.');
   if (data?.referenceAnnotation && kind === 'manages') return { status: 'unknown', reason: 'Lab configuration link only. This relationship is editable but does not execute application traffic or prove AWS behavior.' };
-  const nonIntegration = nonIntegrationReason(source, target);
+  const nonIntegration = nonIntegrationReason(source, target) ?? retiredServiceReason(source, target);
   if (nonIntegration) return bad(nonIntegration);
   const integration = serviceIntegration(source, target);
   if (integration && (kind === 'request' || kind === 'manages')) {
