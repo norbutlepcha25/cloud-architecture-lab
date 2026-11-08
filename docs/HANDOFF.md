@@ -1,5 +1,25 @@
 # Handoff — live project state
 
+## Database services pass (/aws-service, all 18 catalog Databases) — 2026-11-08
+
+Extended the shared service-operation engine (serviceOperations/{definitions,handlers,runner}.ts):
+new operation-only slices for aurora_serverless (auto-pause resume), rds_proxy (secret via proxy role
+trusted by rds.amazonaws.com, writer target, target SG), aurora_dsql (IAM dsql:DbConnect/Admin,
+ACTIVE only), documentdb, memorydb, elasticache_serverless (6379/6380, TLS always, public excluded),
+keyspaces (IAM cassandra:*, 9142, interface endpoint), timestream (InfluxDB 8086; LiveAnalytics closed
+to new customers), redshift_serverless (port ranges), opensearch_db (VPC domain; access policy open|iam
+via runner `privateIam`), neptune_analytics (IAM; `routeCheck`: private endpoint unless public).
+Aurora gained opt-in Connect (legacy request path unchanged). DynamoDB now accepts UPDATING.
+DMS: engine/database/dms.ts StartReplicationTask workflow (VPC placement, dms-vpc-role, endpoint
+SG/credentials/status, full load), DmsPanel + dmsWalkthrough. QLDB: RETIRED_SERVICES rejects every link
+(shut down 2025-07-31); catalog name "(retired)". New-service examples are seeded on node creation
+(seedOnCreate, visible/editable). VPC-hosted DB services added to SUBNET_REQUIRED_SERVICE_IDS.
+Generic operations suite fixture extended (privateIam role, Neptune Analytics private endpoint, RDS
+Proxy secret/role/writer) without changing assertions. Specs docs/behavior/<id>.md for all 18.
+Tests: tests/aws-conformance/databases/database-operations.test.ts (61), test/database-walkthrough
+.test.ts, UI "Databases". npm test 806 engine + 52 UI pass; tsc + build pass. 98 lab/reference
+records (both routing modes) unchanged. Not committed. No browser visual check.
+
 ## Duplicate-key dialog bug fixed; CI green — 2026-10-23
 
 The long-standing UI failure ("Service lessons ... RunTask", expected /ECR repository/) was a real bug:

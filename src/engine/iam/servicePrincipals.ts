@@ -23,7 +23,9 @@ const SERVICE_PRINCIPALS: Record<string, string> = {
   codebuild: 'codebuild.amazonaws.com',
   codedeploy: 'codedeploy.amazonaws.com',
   // Rule execution role: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-targets.html
-  eventbridge: 'events.amazonaws.com'
+  eventbridge: 'events.amazonaws.com',
+  // RDS Proxy role: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-proxy-iam-setup.html
+  rds_proxy: 'rds.amazonaws.com'
 };
 
 export function servicePrincipalFor(serviceId: string): string {

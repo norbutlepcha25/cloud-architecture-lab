@@ -1437,6 +1437,47 @@ test('Third-party actors: drawn developer -> CodeCommit link pushes from the ins
   } finally { await h.unmount(); }
 });
 
+test('Databases: seeded DocumentDB runs from a drawn EC2 caller; DMS task runs from the inspector and honors dms-vpc-role', async () => {
+  const h = await mount(true);
+  const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === text)!;
+  try {
+    await h.act(() => { h.api().addBoundaryNode('vpc', { x: 0, y: 0 }, { width: 1400, height: 800 }); });
+    await h.act(() => { h.api().addBoundaryNode('private_subnet', { x: 40, y: 60 }, { width: 1300, height: 700 }); });
+    await h.act(() => h.api().addServiceNode('ec2', { x: 100, y: 120 }, { subnet: 'private' }));
+    const app = h.api().selectedNode!;
+    await h.act(() => h.api().addServiceNode('documentdb', { x: 500, y: 120 }, { subnet: 'private' }));
+    const docdb = h.api().selectedNode!;
+    assert.equal(docdb.data.customConfig?.operationLab?.action, 'Connect', 'example is seeded and visible');
+    await h.act(() => h.api().onConnect({ source: app.id, target: docdb.id, sourceHandle: null, targetHandle: null }));
+    assert.equal(h.api().edges.find(e => e.target === docdb.id)?.data?.protocol, 'TCP');
+    await h.act(() => h.api().runFromNode(app.id));
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.success, true, h.api().simulationResult?.summary);
+
+    await h.act(() => h.api().addServiceNode('rds', { x: 100, y: 450 }, { subnet: 'private' }));
+    const source = h.api().selectedNode!;
+    await h.act(() => h.api().addServiceNode('aurora_serverless', { x: 900, y: 450 }, { subnet: 'private' }));
+    const target = h.api().selectedNode!;
+    await h.act(() => h.api().addServiceNode('dms', { x: 500, y: 450 }, { subnet: 'private' }));
+    const dms = h.api().selectedNode!;
+    await h.act(() => h.api().onConnect({ source: source.id, target: dms.id, sourceHandle: null, targetHandle: null }));
+    await h.act(() => h.api().onConnect({ source: dms.id, target: target.id, sourceHandle: null, targetHandle: null }));
+    assert.equal(h.api().edges.filter(e => [e.source, e.target].includes(dms.id) && e.data?.relationship === 'manages').length, 2);
+    await h.act(() => button('Config').click());
+    await h.act(() => button('Replication task').click());
+    await h.act(() => button('Start replication task').click());
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.kind, 'workflow');
+    assert.equal(h.api().simulationResult?.success, true, h.api().simulationResult?.summary);
+    const role = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(i => i.parentElement?.textContent?.includes('dms-vpc-role'))!;
+    await h.act(() => role.click());
+    assert.equal(h.api().nodes.find(n => n.id === dms.id)?.data.customConfig?.dmsVpcRole, false);
+    await h.act(() => button('Start replication task').click());
+    await h.act(() => h.api().setIsPlaying(false));
+    assert.equal(h.api().simulationResult?.statusCode, 403);
+  } finally { await h.unmount(); }
+});
+
 test('Developer tools: Start build and Create deployment execute selected services without changing the saved request start', async () => {
   const h = await mount(true);
   const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === text)!;

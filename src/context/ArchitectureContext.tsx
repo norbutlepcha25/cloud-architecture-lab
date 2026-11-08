@@ -51,6 +51,7 @@ import type { LabReference } from '../data/courseLabs.ts';
 import { runLabReference } from '../engine/labs/runLabReference.ts';
 import { isExternalActor } from '../engine/architecture/externalActors.ts';
 import { nonIntegrationReason, serviceIntegration } from '../engine/architecture/serviceIntegrations.ts';
+import { SERVICE_OPERATIONS, operationSample } from '../engine/serviceOperations/definitions.ts';
 
 interface ArchitectureContextType {
   draftName: string;
@@ -613,7 +614,11 @@ export const ArchitectureProvider: React.FC<{ children: ReactNode }> = ({ childr
         subnet: options?.subnet || (isExternalActor(serviceId) || ['route53', 'cloudfront'].includes(serviceId) ? 'global' : ['alb', 'api_gateway'].includes(serviceId) ? 'public' : 'private'),
         replicas: options?.replicas || serviceDef.defaultConfig?.replicas || 1,
         multiAz: options?.multiAz !== undefined ? options.multiAz : (serviceDef.defaultConfig?.multiAz || false),
-        ...options
+        ...options,
+        // Operation-only services start with their documented example so a drawn caller can run it;
+        // the settings stay visible and editable in the Service operation lab panel.
+        ...(SERVICE_OPERATIONS[serviceId]?.seedOnCreate && !options?.customConfig?.operationLab
+          ? { customConfig: { ...options?.customConfig, operationLab: operationSample(serviceId) } } : {})
       },
       zIndex: 10
     };

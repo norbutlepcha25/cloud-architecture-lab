@@ -8,6 +8,7 @@ import {
 } from '../../engine/cicd/pipeline.ts';
 import { DEVELOPER_POLICY_PRESETS, pushTargets } from '../../engine/cicd/gitPush.ts';
 import { isIntegrationLink } from '../../engine/architecture/serviceIntegrations.ts';
+import { dmsEndpoints } from '../../engine/database/dms.ts';
 import { isCicdWorkflowLink } from '../../engine/architecture/cicdRelationships.ts';
 import { servicePrincipalFor } from '../../engine/iam/servicePrincipals.ts';
 
@@ -154,6 +155,25 @@ export function AmplifyBranchPanel({ node, onConfig }: Pick<Props, 'node' | 'onC
   </section>;
 }
 
+/** DMS replication task; decisions live in engine/database/dms.ts. */
+export function DmsPanel({ node, nodes, edges, onConfig, onRun }: Props & { onRun: () => void }) {
+  const c = cfg(node);
+  const { sources, targets } = dmsEndpoints(node, nodes, edges);
+  const pick = (key: string, list: Node<any>[], label: string) => list.length > 1 && <label className="block font-semibold text-slate-700">{label}
+    <select className={field} value={c[key] ?? list[0].id} onChange={e => onConfig({ [key]: e.target.value })}>{list.map(n => <option key={n.id} value={n.id}>{n.data.label}</option>)}</select>
+  </label>;
+  return <section className="space-y-3 text-xs">
+    <p className="text-slate-600">Source: {sources[0]?.data.label ?? 'connect a database to DMS'} · Target: {targets[0]?.data.label ?? 'connect DMS to a database'}</p>
+    {pick('sourceId', sources, 'Source endpoint')}{pick('targetId', targets, 'Target endpoint')}
+    <label className="flex items-center gap-2 text-slate-700">
+      <input type="checkbox" checked={c.dmsVpcRole !== false} onChange={e => onConfig({ dmsVpcRole: e.target.checked })} />
+      Account has dms-vpc-role (AmazonDMSVPCManagementRole)
+    </label>
+    <button type="button" className={button} disabled={!sources.length || !targets.length} onClick={onRun}><Play className="w-3.5 h-3.5" />Start replication task</button>
+    <p className="text-slate-500">The replication instance tests both endpoints (same VPC, security group ingress on the database port, credentials), then runs a full load. CDC and table mappings are not simulated.</p>
+  </section>;
+}
+
 export function CodeBuildPanel({ node, nodes, edges, onConfig, onRun }: Props & { onRun: () => void }) {
   const c = cfg(node);
   const pushes = edges.some(e => e.source === node.id && nodes.find(n => n.id === e.target)?.data.serviceId === 'ecr_registry' && isCicdWorkflowLink(node, nodes.find(n => n.id === e.target), e.data));
@@ -249,6 +269,8 @@ export function CodeDeployPanel({ node, nodes, edges, onConfig, onInstance, onRu
 const ROLE_ACTIONS: Record<string, string[]> = {
   codepipeline: [...new Set(Object.values(PIPELINE_ROLE_ACTIONS).flat())],
   codebuild: ['codecommit:GitPull', ...CODEBUILD_ROLE_ACTIONS, ...CODEBUILD_ECR_PUSH_ACTIONS],
+  // RDS Proxy role reads its database secret (rds-proxy-iam-setup).
+  rds_proxy: ['secretsmanager:GetSecretValue', 'kms:Decrypt'],
   // EventBridge rule execution role for CodeBuild / CodePipeline targets.
   eventbridge: ['codebuild:StartBuild', 'codepipeline:StartPipelineExecution'],
   codedeploy: ['ec2:DescribeInstances', 'autoscaling:DescribeAutoScalingGroups', 'ecs:CreateTaskSet', 'ecs:UpdateServicePrimaryTaskSet', 'elasticloadbalancing:ModifyListener', 'lambda:GetAlias', 'lambda:UpdateAlias']

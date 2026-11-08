@@ -163,3 +163,14 @@ failure is tested without claiming specialized X-Ray FAILURE_SIMULATION or FULL_
 - Service integrations (serviceIntegrations.ts): build dependencies are checked as role permissions
   plus health only (no secret values, packages or signatures); EventBridge patterns match branch
   only; non-executed integrations are relationship-only and say so in their connection reason.
+
+## Database operation slices (2026-11-08)
+
+- Credentials for password-based databases are an authored `credentialsValid` input, not a password
+  exchange; IAM database authentication (rds-db, memorydb/elasticache:Connect, neptune-db, MONGODB-AWS)
+  is excluded except where IAM is the only mode (Aurora DSQL, Keyspaces, Neptune Analytics).
+- Status values AWS does not document as connection gates are not enforced (OpenSearch domain status);
+  Aurora DSQL non-ACTIVE states return 501 because AWS does not state which accept connections.
+- Private database services require same-VPC placement; peering/public endpoints are 501.
+- DMS evaluates connectivity, credentials and roles for a full load only; data volume, CDC and
+  mid-task endpoint loss are not simulated. QLDB is retired and rejected everywhere.

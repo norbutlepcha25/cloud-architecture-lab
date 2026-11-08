@@ -62,6 +62,8 @@ export const SUBNET_REQUIRED_SERVICE_IDS = [
   'alb', 'nlb', 'elb', 'app_runner',
   'ec2', 'ecs', 'fargate',
   'rds', 'aurora', 'elasticache', 'neptune', 'redshift',
+  // VPC-hosted database services (docs/behavior/<id>.md); regional ones (DynamoDB, Keyspaces, DSQL, Neptune Analytics) are not.
+  'aurora_serverless', 'rds_proxy', 'documentdb', 'memorydb', 'elasticache_serverless', 'redshift_serverless', 'timestream', 'opensearch_db', 'dms',
   'privatelink'
 ];
 

@@ -1,6 +1,7 @@
 import { operationMode } from '../serviceOperations/definitions.ts';
 import { runServiceOperation } from '../serviceOperations/runner.ts';
 import { runXraySubmission } from '../observability/xray.ts';
+import { runDmsReplicationTask } from '../database/dms.ts';
 import { isCicdWorkflowLink } from '../architecture/cicdRelationships.ts';
 import { isDependencyCall, relationshipKind } from '../architecture/relationships.ts';
 import type { Node, Edge } from '@xyflow/react';
@@ -26,6 +27,7 @@ export function runLiveSimulation(nodes: Node<ServiceNodeData>[], edges: Edge<Co
   const start = nodes.find(node => node.id === scenario.startNodeId);
   if (start && operationMode(start.data.serviceId,start.data.customConfig)) return structuredClone(runServiceOperation(start,nodes,edges,scenario));
   if (start?.data.serviceId === 'xray') return structuredClone(runXraySubmission(start, nodes, edges, scenario));
+  if (start?.data.serviceId === 'dms') return structuredClone(runDmsReplicationTask(start, [...nodes].sort(byId), [...edges].sort(byId), scenario));
   // A developer's Git push, or a push event at a third-party Git host, may start a pipeline.
   if (start?.data.serviceId === 'developer' && pushTargets(start, nodes, edges).length) return structuredClone(runGitPush(start, [...nodes].sort(byId), [...edges].sort(byId), scenario));
   if (start && isConnectionGitProvider(start.data.serviceId)) return structuredClone(runGitPush(undefined, [...nodes].sort(byId), [...edges].sort(byId), scenario, start));
