@@ -16,3 +16,6 @@ npm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Build/export archives (old copies of dist/ were committed by mistake)
+/*.zip

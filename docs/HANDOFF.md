@@ -430,7 +430,28 @@ overwrite stale sections instead of appending; `git log` is the changelog.
 Full objective/intent/architecture rules live in the root `CLAUDE.md` — this
 file only tracks what's currently true and in flight.
 
-Last updated: 2026-10-05 (Claude). UNCOMMITTED (latest): light/dark mode (home + whole lab) + home scroll animation.
+Last updated: 2026-10-12 (Claude). UNCOMMITTED (latest), verified 470 engine/conformance + 39 UI
+tests pass and `npm run build` passes:
+- **EKS reference fix** — `src/data/references/15-eks-architecture.json` (added in a49c031) was missing
+  its `eks-workload` node: the scenario's `startNodeId`, its description ("Start Send Request at
+  Application Service") and `test/eks-reference.test.ts` all needed it, so `main` CI was red (2 failing
+  tests) and in the app the request silently fell back to the admin node, so the readiness/selector
+  503 lesson could not be simulated. Upstream (norbutlepcha25/main) independently re-added the same
+  node in private subnet 1; merging both produced a duplicate `eks-workload` id ("Invalid or
+  duplicate reference node"), so on 2026-11-19 the file was reset to upstream's version.
+- **Repo cleanup** — removed committed `dist.zip`, `aws-architecture-lab-labs.zip`,
+  `aws-architecture-lab-labs-1-13.zip` (stale 2026-09-21 copies of the built app, unreferenced);
+  `.gitignore` now ignores root `/*.zip`.
+- **Bundle size** — `vite.config.ts`: service icons (`src/components/serviceIcon/*.svg`, eager glob in
+  `icons/awsIconRegistry.ts`) are no longer base64-inlined into JS (`assetsInlineLimit`), and
+  react / @xyflow / lucide / other deps are split into cached chunks. Main chunk 2,034 kB → 1,103 kB
+  (gzip 528 → 240 kB). Still above Vite's 500 kB warning: the rest is engine + data + UI, all
+  loaded by `ArchitectureProvider`, which wraps the home page too; further cuts need lazy-loading
+  the lab, not done. PNG export with file-URL icons not checked in a browser (html-to-image
+  fetches same-origin images; some icons were already file URLs before this change).
+- Light/dark mode + home scroll animation described below are now committed (831fb6a and later).
+
+Earlier (2026-10-05, Claude): light/dark mode (home + whole lab) + home scroll animation.
 utils/theme.ts useTheme() shares one preference (localStorage `cloud-architecture-lab:theme`, default =
 OS prefers-color-scheme); layout/ThemeToggle.tsx is the button (home nav; lab header beside Home).
 Home: `.lab-home[data-theme=dark]` overrides in home.css (exported-PNG illustration stays white on purpose).
@@ -557,8 +578,8 @@ commit or deployment. Existing lab JSON migration and Import-reference removal p
 
 ## Current state (as of last update)
 
-Working tree contains uncommitted changes from multiple agents. Latest test/build results above.
-Do not discard unrelated changes.
+As of 2026-10-12 the only uncommitted changes are the ones listed at the top of this file; everything
+else below is committed. Latest test/build results above. Do not discard unrelated changes.
 
 ### In-flight work
 
@@ -812,7 +833,10 @@ Do not discard unrelated changes.
 - Review the managed-service inspector on the running app and use the documented workflows.
 - Add remaining AWS semantics incrementally with documented conformance scenarios, starting
   with service-model consolidation and queue redrive/consumer lifecycle if requested.
-- No changes have been committed or deployed by this session.
+- Bundle: if load time matters, lazy-load the lab (`AppContent` + `ArchitectureProvider`) from the
+  home page; check that home → lab → home keeps state before shipping.
+- Manually check in a browser: EKS architecture reference loads and Send Request starts at
+  "Application Service"; service icons render; PNG export still includes icons.
 
 ## Service simulation capability registry
 
